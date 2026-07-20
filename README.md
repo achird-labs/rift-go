@@ -1,6 +1,6 @@
 # rift-go
 
-Official Go SDK for [Rift](https://github.com/EtaCassiopeia/rift) — a high-performance,
+Official Go SDK for [Rift](https://github.com/achird-labs/rift) — a high-performance,
 Mountebank-compatible HTTP/HTTPS mock server written in Rust.
 
 > **Status: design phase.** API design and milestones are tracked in the issues of this repo
