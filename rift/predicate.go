@@ -120,12 +120,7 @@ func setField(pred *Predicate, op, field string, value JSON) {
 	case "matches":
 		ensure(&pred.Matches)[field] = value
 	case "exists":
-		if pred.Exists == nil {
-			pred.Exists = map[string]bool{}
-		}
-		// Exists takes a bool; anything else is a caller error caught at build time.
-		b, _ := value.(bool)
-		pred.Exists[field] = b
+		ensure(&pred.Exists)[field] = value
 	}
 }
 

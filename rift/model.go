@@ -78,13 +78,16 @@ type FieldMatch map[string]JSON
 // Predicate selects requests. Exactly one operator key is normally set, alongside optional
 // matcher parameters (CaseSensitive, Except, ...) and selectors (XPath, JSONPath).
 type Predicate struct {
-	Equals     FieldMatch      `json:"equals,omitempty"`
-	DeepEquals FieldMatch      `json:"deepEquals,omitempty"`
-	Contains   FieldMatch      `json:"contains,omitempty"`
-	StartsWith FieldMatch      `json:"startsWith,omitempty"`
-	EndsWith   FieldMatch      `json:"endsWith,omitempty"`
-	Matches    FieldMatch      `json:"matches,omitempty"`
-	Exists     map[string]bool `json:"exists,omitempty"`
+	Equals     FieldMatch `json:"equals,omitempty"`
+	DeepEquals FieldMatch `json:"deepEquals,omitempty"`
+	Contains   FieldMatch `json:"contains,omitempty"`
+	StartsWith FieldMatch `json:"startsWith,omitempty"`
+	EndsWith   FieldMatch `json:"endsWith,omitempty"`
+	Matches    FieldMatch `json:"matches,omitempty"`
+	// Exists takes the same nested field shape as the other operators — the leaves are booleans
+	// rather than values, e.g. {"exists":{"headers":{"Authorization":true}}}. It is not a flat
+	// field→bool map, which is the shape it superficially resembles.
+	Exists FieldMatch `json:"exists,omitempty"`
 
 	Not *Predicate  `json:"not,omitempty"`
 	And []Predicate `json:"and,omitempty"`

@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -74,8 +75,15 @@ func newProcess(cmd *exec.Cmd) *process {
 	return p
 }
 
-// Spawn starts a rift process and returns a Remote wired to it. Closing the returned Remote
-// stops the process.
+// Spawn starts a rift process and returns a Remote wired to it.
+//
+// ctx bounds *startup only*. The engine's lifetime is owned by the returned Remote: it runs
+// until Close, regardless of what happens to ctx.
+//
+// That distinction is deliberate. exec.CommandContext would tie the child to ctx, so passing the
+// obvious `ctx, cancel := context.WithTimeout(...); defer cancel()` would kill the engine the
+// moment the calling function returned — the engine would be dead before the first request, and
+// the failure would look like a refused connection rather than a lifetime bug.
 //
 // The engine is started on a free admin port unless one is pinned, so parallel test binaries do
 // not collide, and Spawn does not return until the admin API answers — a client that raced
@@ -99,7 +107,8 @@ func Spawn(ctx context.Context, opts SpawnOptions) (*Remote, error) {
 	}
 	args = append(args, opts.Args...)
 
-	cmd := exec.CommandContext(ctx, bin, args...) //nolint:gosec // path is caller-supplied by design
+	// Deliberately exec.Command, not exec.CommandContext — see the lifetime note above.
+	cmd := exec.Command(bin, args...) //nolint:gosec // path is caller-supplied by design
 	cmd.Dir = opts.Dir
 	cmd.Env = opts.Env
 	cmd.Stdout = opts.Stdout
@@ -240,17 +249,21 @@ func findBinary(explicit string) (string, error) {
 		return "", fmt.Errorf("%w: rift binary %q does not exist", ErrEngineUnavailable, c)
 	}
 
-	name := "rift"
+	// The released binary is "rift"; a cargo build of the engine produces "rift-http-proxy".
+	// Accepting both means a contributor running against a local build needs no extra setup.
+	names := []string{"rift", "rift-http-proxy"}
 	if runtime.GOOS == "windows" {
-		name = "rift.exe"
+		names = []string{"rift.exe", "rift-http-proxy.exe"}
 	}
-	found, err := exec.LookPath(name)
-	if err != nil {
-		return "", fmt.Errorf(
-			"%w: no rift binary found on PATH\n  fix: install rift, or set %s=/path/to/rift",
-			ErrEngineUnavailable, EnvBinary)
+	for _, name := range names {
+		if found, err := exec.LookPath(name); err == nil {
+			return found, nil
+		}
 	}
-	return found, nil
+	return "", fmt.Errorf(
+		"%w: no rift binary found on PATH (looked for %s)\n"+
+			"  fix: install rift, or set %s=/path/to/rift",
+		ErrEngineUnavailable, strings.Join(names, ", "), EnvBinary)
 }
 
 // freePort asks the OS for an unused TCP port. There is an unavoidable race between closing the

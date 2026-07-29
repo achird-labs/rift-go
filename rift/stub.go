@@ -208,6 +208,8 @@ func existingField(pred *Predicate, op, field string) JSON {
 		m = pred.EndsWith
 	case "matches":
 		m = pred.Matches
+	case "exists":
+		m = pred.Exists
 	default:
 		return nil
 	}
