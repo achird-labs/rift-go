@@ -1,0 +1,203 @@
+# Reusable dependency-bump scaffold (workflow_call). Shared by every hop of the Rift ecosystem's
+# automated dependency loop: it polls an upstream repo's latest release and, when it is newer than the
+# version currently pinned, opens a `<branch_prefix><version>` PR that bumps the pin. It is the
+# single source of truth for the invariant scaffolding (poll / compare / idempotent branch+PR /
+# injection-safe changelog / dry-run); the ONLY per-repo knowledge — which files pin the dependency
+# and how to edit them — lives in that repo's `scripts/bump.sh`.
+#
+# Contract with the calling repo:
+#   scripts/bump.sh --current      -> prints the currently pinned version (bare, no leading v)
+#   scripts/bump.sh <new-version>  -> rewrites every pin literal and self-verifies (non-zero on failure)
+#
+# Callers own the triggers (schedule + workflow_dispatch) and pass inputs; this workflow cannot declare
+# its own schedule. The companion auto-release stays per-repo (the publish step genuinely differs per
+# stack), so this reusable covers the bump half only.
+#
+# rift-go has no auto-release: a Go module needs no registry publish, and the first release tag is
+# deliberately a human decision. A bump PR here therefore waits for a human even when CI is green.
+
+name: Dependency Bump (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      upstream_repo:
+        description: "owner/repo whose latest release drives the bump (e.g. achird-labs/rift)"
+        type: string
+        required: true
+      branch_prefix:
+        description: "Branch/PR prefix, e.g. 'chore/engine-' -> chore/engine-0.14.1"
+        type: string
+        required: true
+      dep_name:
+        description: "Human name of the dependency for commit/PR messages (e.g. 'rift engine')"
+        type: string
+        required: true
+      dry_run:
+        description: "Do everything except push the branch / open the PR"
+        type: boolean
+        default: false
+
+jobs:
+  bump:
+    name: Check for a newer ${{ inputs.dep_name }} release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      UPSTREAM_REPO: ${{ inputs.upstream_repo }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Determine latest upstream release and current pin
+        id: versions
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if ! gh auth status >/dev/null 2>&1; then
+            echo "gh is not authenticated (token missing/invalid) — cannot query releases."
+            exit 1
+          fi
+
+          RELEASE_JSON="$(gh release view --repo "${UPSTREAM_REPO}" --json tagName,body)"
+          TAG_NAME="$(echo "${RELEASE_JSON}" | jq -r '.tagName')"
+          if [ -z "${TAG_NAME}" ] || [ "${TAG_NAME}" = "null" ]; then
+            echo "Could not resolve a latest release tag for ${UPSTREAM_REPO}."
+            exit 1
+          fi
+          LATEST="${TAG_NAME#v}"
+
+          CURRENT="$(bash scripts/bump.sh --current)"
+          if [ -z "${CURRENT}" ]; then
+            echo "scripts/bump.sh --current returned nothing — cannot read the current pin."
+            exit 1
+          fi
+
+          echo "Latest upstream release: ${LATEST} (tag ${TAG_NAME})"
+          echo "Current pinned version:  ${CURRENT}"
+          echo "latest=${LATEST}" >> "$GITHUB_OUTPUT"
+          echo "current=${CURRENT}" >> "$GITHUB_OUTPUT"
+
+          # Multiline changelog excerpt, truncated so it fits comfortably in a PR body.
+          BODY="$(echo "${RELEASE_JSON}" | jq -r '.body // ""' | head -c 4000)"
+          # Randomized heredoc delimiter so a release-body line can't spoof the terminator
+          # (the documented GitHub Actions multiline-output-injection vector).
+          DELIM="DEP_BUMP_BODY_$(openssl rand -hex 8)"
+          {
+            echo "body<<${DELIM}"
+            echo "${BODY}"
+            echo "${DELIM}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Compare versions
+        id: compare
+        shell: bash
+        run: |
+          set -euo pipefail
+          LATEST="${{ steps.versions.outputs.latest }}"
+          CURRENT="${{ steps.versions.outputs.current }}"
+
+          if [ "${LATEST}" = "${CURRENT}" ]; then
+            echo "Up to date (current=${CURRENT}, latest=${LATEST}). Nothing to do."
+            echo "should_bump=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          SMALLEST="$(printf '%s\n%s\n' "${CURRENT}" "${LATEST}" | sort -V | head -n1)"
+          if [ "${SMALLEST}" = "${LATEST}" ]; then
+            echo "Latest release (${LATEST}) is not newer than current (${CURRENT}). Nothing to do."
+            echo "should_bump=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "A newer ${{ inputs.dep_name }} release is available: ${CURRENT} -> ${LATEST}."
+          echo "should_bump=true" >> "$GITHUB_OUTPUT"
+
+      - name: Check for an existing branch or PR
+        id: existing
+        if: steps.compare.outputs.should_bump == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          BRANCH="${{ inputs.branch_prefix }}${{ steps.versions.outputs.latest }}"
+
+          EXISTS=false
+          if git ls-remote --exit-code --heads origin "${BRANCH}" >/dev/null 2>&1; then
+            echo "Branch ${BRANCH} already exists on origin."
+            EXISTS=true
+          fi
+
+          PR_COUNT="$(gh pr list --repo "${{ github.repository }}" --head "${BRANCH}" --state open --json number --jq 'length')"
+          if [ "${PR_COUNT}" -gt 0 ]; then
+            echo "An open PR already targets branch ${BRANCH}."
+            EXISTS=true
+          fi
+
+          if [ "${EXISTS}" = "true" ]; then
+            echo "Idempotent no-op: branch/PR for ${BRANCH} already present."
+          fi
+
+          echo "branch=${BRANCH}" >> "$GITHUB_OUTPUT"
+          echo "exists=${EXISTS}" >> "$GITHUB_OUTPUT"
+
+      - name: Bump the pin and open a PR
+        if: steps.compare.outputs.should_bump == 'true' && steps.existing.outputs.exists == 'false'
+        shell: bash
+        env:
+          LATEST: ${{ steps.versions.outputs.latest }}
+          CURRENT: ${{ steps.versions.outputs.current }}
+          BRANCH: ${{ steps.existing.outputs.branch }}
+          DEP_NAME: ${{ inputs.dep_name }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          CHANGELOG: ${{ steps.versions.outputs.body }}
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git checkout -b "${BRANCH}"
+
+          # All repo-specific edits + self-verification live in the repo's bump script.
+          bash scripts/bump.sh "${LATEST}"
+
+          git commit -a \
+            -m "chore(deps): bump ${DEP_NAME} to ${LATEST}" \
+            -m "Bumps the ${DEP_NAME} pin from ${CURRENT} to ${LATEST} via scripts/bump.sh (the single source of truth for this repo's pin literals)."
+
+          PR_TITLE="chore(deps): bump ${DEP_NAME} to ${LATEST}"
+
+          # Build the PR body in a temp file rather than a heredoc: this run step is embedded in an
+          # indented YAML block scalar, and a heredoc terminator here would not reliably land at
+          # column 0, which breaks heredoc parsing.
+          PR_BODY_FILE="$(mktemp)"
+          {
+            printf 'Bumps the pinned %s version from `%s` to `%s` via `scripts/bump.sh`.\n\n' "${DEP_NAME}" "${CURRENT}" "${LATEST}"
+            printf '### Upstream release notes (%s %s)\n\n' "${UPSTREAM_REPO}" "${LATEST}"
+            printf '%s\n\n' "${CHANGELOG}"
+            printf -- '---\n\n'
+            printf 'CI replays the new release'"'"'s conformance corpus against its cdylib and engine binary\n'
+            printf 'on both transports, so a green run here means the SDK is compatible with %s — and a\n' "${LATEST}"
+            printf 'red one means it is not, which is the whole point of the pin. Merge is left to a human;\n'
+            printf 'this repo has no auto-release loop. Opened automatically by the reusable dep-bump workflow.\n'
+          } > "${PR_BODY_FILE}"
+
+          if [ "${DRY_RUN}" = "true" ]; then
+            echo "DRY RUN: would push branch '${BRANCH}' and open a PR titled:"
+            echo "  ${PR_TITLE}"
+            echo "DRY RUN: PR body would be:"
+            cat "${PR_BODY_FILE}"
+            exit 0
+          fi
+
+          git push origin "${BRANCH}"
+
+          gh pr create \
+            --repo "${{ github.repository }}" \
+            --base "${{ github.event.repository.default_branch || 'master' }}" \
+            --head "${BRANCH}" \
+            --title "${PR_TITLE}" \
+            --body-file "${PR_BODY_FILE}"
