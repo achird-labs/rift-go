@@ -1,0 +1,35 @@
+# Keeps RIFT_VERSION (and the drift-catcher literals in the docs) in sync with the latest
+# achird-labs/rift release. Thin caller of the reusable dep-bump scaffold — all the invariant logic
+# (poll / compare / idempotent branch+PR / injection-safe changelog / dry-run) lives in
+# ./.github/workflows/dep-bump.yml, and all the rift-go-specific edits live in scripts/bump.sh. A
+# real "chore/engine-<version>" PR only appears when achird-labs/rift has published a newer release.
+#
+# This matters more here than the pin count suggests: the conformance corpus is version-locked to
+# the engine release, so a stale RIFT_VERSION means the SDK is asserting parity against an engine
+# nobody runs any more, and real drift stays invisible until someone checks by hand.
+
+name: Engine Bump
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Do everything except push the branch / open the PR; just log what would happen"
+        type: boolean
+        default: false
+  schedule:
+    # Weekly: Monday 06:00 UTC.
+    - cron: '0 6 * * 1'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  bump:
+    uses: ./.github/workflows/dep-bump.yml
+    with:
+      upstream_repo: achird-labs/rift
+      branch_prefix: chore/engine-
+      dep_name: rift engine
+      dry_run: ${{ github.event.inputs.dry_run == 'true' }}
