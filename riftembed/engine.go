@@ -1,6 +1,7 @@
 package riftembed
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"runtime"
@@ -134,7 +135,15 @@ func (e *Engine) Close() error {
 // duration of the call, and the (downcall, error-read) pair happens on one OS thread.
 
 // withHandle runs fn with the handle held live and the goroutine pinned.
-func (e *Engine) withHandle(fn func(h uintptr) error) error {
+//
+// The context is checked before the downcall and not after: an FFI call is synchronous and
+// cannot be interrupted once it has started. Honouring cancellation at the boundary is the
+// honest amount of support to offer, and it is enough for the case that matters — a cancelled
+// test not queueing more work against an engine it is about to close.
+func (e *Engine) withHandle(ctx context.Context, fn func(h uintptr) error) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("%w: %w", rift.ErrEngineUnavailable, err)
+	}
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	if e.closed {
@@ -193,3 +202,7 @@ func platformSupported() bool {
 		return false
 	}
 }
+
+// Engine implements rift.Client, so a test suite — including the SDK conformance corpus — runs
+// unchanged against an embedded engine or a remote one.
+var _ rift.Client = (*Engine)(nil)

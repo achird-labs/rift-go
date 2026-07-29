@@ -61,9 +61,10 @@ func TestStartReportsBuildInfoAndABI(t *testing.T) {
 // The end-to-end shape: build an imposter with the DSL, create it in-process, drive it over
 // real HTTP, and read the journal back through the C ABI.
 func TestCreateServeAndRecord(t *testing.T) {
+	ctx := t.Context()
 	eng := startEngine(t)
 
-	port, err := eng.CreateImposter(rift.NewImposter("users").Record().
+	port, err := eng.CreateImposter(ctx, rift.NewImposter("users").Record().
 		Stub(rift.OnGet("/api/users/1").
 			Return(rift.OKJSON(map[string]rift.JSON{"id": 1, "name": "Alice"}))).
 		Stub(rift.OnAny().Return(rift.Status(404))))
@@ -92,7 +93,7 @@ func TestCreateServeAndRecord(t *testing.T) {
 		t.Errorf("unmatched path status = %d, want 404", status)
 	}
 
-	recorded, err := eng.Recorded(port)
+	recorded, err := eng.Recorded(ctx, port)
 	if err != nil {
 		t.Fatalf("Recorded: %v", err)
 	}
@@ -106,9 +107,10 @@ func TestCreateServeAndRecord(t *testing.T) {
 
 // Verification runs through the engine's own predicate evaluator, not client-side.
 func TestVerifyCountsThroughEngine(t *testing.T) {
+	ctx := t.Context()
 	eng := startEngine(t)
 
-	port, err := eng.CreateImposter(rift.NewImposter("verify").Record().
+	port, err := eng.CreateImposter(ctx, rift.NewImposter("verify").Record().
 		Stub(rift.OnAny().Return(rift.OK())))
 	if err != nil {
 		t.Fatalf("CreateImposter: %v", err)
@@ -119,7 +121,7 @@ func TestVerifyCountsThroughEngine(t *testing.T) {
 	}
 	httpGet(t, fmt.Sprintf("http://127.0.0.1:%d/other", port))
 
-	res, err := eng.Verify(port, rift.VerifyRequest{
+	res, err := eng.Verify(ctx, port, rift.VerifyRequest{
 		Predicates: []rift.Predicate{rift.PredicateOn("path", rift.Equals("/ping"))},
 	})
 	if err != nil {
@@ -136,24 +138,25 @@ func TestVerifyCountsThroughEngine(t *testing.T) {
 // Spaces partition one port between parallel flows — the primitive that lets shards share an
 // imposter without seeing each other's traffic.
 func TestSpacesIsolateFlows(t *testing.T) {
+	ctx := t.Context()
 	eng := startEngine(t)
 
-	port, err := eng.CreateImposter(rift.NewImposter("spaces").Record().
+	port, err := eng.CreateImposter(ctx, rift.NewImposter("spaces").Record().
 		Stub(rift.OnAny().Return(rift.Status(404))))
 	if err != nil {
 		t.Fatalf("CreateImposter: %v", err)
 	}
 
-	if err := eng.SpaceAddStub(port, "flow-a",
+	if err := eng.SpaceAddStub(ctx, port, "flow-a",
 		rift.OnGet("/who").Return(rift.OKText("a"))); err != nil {
 		t.Fatalf("SpaceAddStub(flow-a): %v", err)
 	}
-	if err := eng.SpaceAddStub(port, "flow-b",
+	if err := eng.SpaceAddStub(ctx, port, "flow-b",
 		rift.OnGet("/who").Return(rift.OKText("b"))); err != nil {
 		t.Fatalf("SpaceAddStub(flow-b): %v", err)
 	}
 
-	stubs, err := eng.SpaceListStubs(port, "flow-a")
+	stubs, err := eng.SpaceListStubs(ctx, port, "flow-a")
 	if err != nil {
 		t.Fatalf("SpaceListStubs: %v", err)
 	}
@@ -166,16 +169,17 @@ func TestSpacesIsolateFlows(t *testing.T) {
 		t.Errorf("flow-a has %d stubs, want 1", len(listed))
 	}
 
-	if err := eng.SpaceDelete(port, "flow-a"); err != nil {
+	if err := eng.SpaceDelete(ctx, port, "flow-a"); err != nil {
 		t.Errorf("SpaceDelete: %v", err)
 	}
 }
 
 // Errors must classify, so callers can branch without matching on strings.
 func TestMissingImposterClassifies(t *testing.T) {
+	ctx := t.Context()
 	eng := startEngine(t)
 
-	err := eng.DeleteImposter(59999)
+	err := eng.DeleteImposter(ctx, 59999)
 	if err == nil {
 		t.Fatal("deleting a nonexistent imposter returned nil error")
 	}
@@ -188,6 +192,7 @@ func TestMissingImposterClassifies(t *testing.T) {
 
 // Calls after Close must fail cleanly rather than using a freed handle.
 func TestUseAfterCloseIsSafe(t *testing.T) {
+	ctx := t.Context()
 	requireLibrary(t)
 	eng, err := riftembed.Start(riftembed.Options{})
 	if err != nil {
@@ -199,7 +204,7 @@ func TestUseAfterCloseIsSafe(t *testing.T) {
 	if err := eng.Close(); err != nil {
 		t.Errorf("second Close should be a no-op, got %v", err)
 	}
-	if _, err := eng.CreateImposter(rift.NewImposter("x")); !errors.Is(err, rift.ErrClosed) {
+	if _, err := eng.CreateImposter(ctx, rift.NewImposter("x")); !errors.Is(err, rift.ErrClosed) {
 		t.Errorf("CreateImposter after Close = %v, want ErrClosed", err)
 	}
 }

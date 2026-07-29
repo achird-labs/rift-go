@@ -1,6 +1,7 @@
 package riftembed
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
@@ -14,13 +15,13 @@ import (
 
 // CreateImposter creates an imposter and returns the port it bound. A zero explicit port lets
 // the engine assign one, which is what the returned value reports.
-func (e *Engine) CreateImposter(src rift.ImposterSource) (uint16, error) {
+func (e *Engine) CreateImposter(ctx context.Context, src rift.ImposterSource) (uint16, error) {
 	body, err := rift.ToJSON(src.BuildImposter())
 	if err != nil {
 		return 0, err
 	}
 	var port uint16
-	err = e.withHandle(func(h uintptr) error {
+	err = e.withHandle(ctx, func(h uintptr) error {
 		// 0 is never a live imposter port, so it doubles as the error sentinel.
 		if port = e.sym.createImposter(h, string(body)); port == 0 {
 			return e.lastError("create imposter")
@@ -31,15 +32,15 @@ func (e *Engine) CreateImposter(src rift.ImposterSource) (uint16, error) {
 }
 
 // DeleteImposter removes one imposter and frees its port.
-func (e *Engine) DeleteImposter(port uint16) error {
-	return e.withHandle(func(h uintptr) error {
+func (e *Engine) DeleteImposter(ctx context.Context, port uint16) error {
+	return e.withHandle(ctx, func(h uintptr) error {
 		return e.checkRC("delete imposter", e.sym.deleteImposter(h, port))
 	})
 }
 
 // DeleteAll removes every imposter.
-func (e *Engine) DeleteAll() error {
-	return e.withHandle(func(h uintptr) error {
+func (e *Engine) DeleteAll(ctx context.Context) error {
+	return e.withHandle(ctx, func(h uintptr) error {
 		return e.checkRC("delete all imposters", e.sym.deleteAll(h))
 	})
 }
@@ -54,13 +55,13 @@ type ListOptions struct {
 
 // ListImposters returns the engine's imposters. With Replayable set the result is
 // {"imposters":[<ImposterConfig>...]}; otherwise a Mountebank-style summary.
-func (e *Engine) ListImposters(opts ListOptions) (json.RawMessage, error) {
+func (e *Engine) ListImposters(ctx context.Context, opts ListOptions) (json.RawMessage, error) {
 	body, err := json.Marshal(opts)
 	if err != nil {
 		return nil, err
 	}
 	var out json.RawMessage
-	err = e.withHandle(func(h uintptr) error {
+	err = e.withHandle(ctx, func(h uintptr) error {
 		out, err = e.takeJSON("list imposters", e.sym.listImposters(h, string(body)))
 		return err
 	})
@@ -68,13 +69,13 @@ func (e *Engine) ListImposters(opts ListOptions) (json.RawMessage, error) {
 }
 
 // GetImposter returns one imposter's projection.
-func (e *Engine) GetImposter(port uint16, opts ListOptions) (json.RawMessage, error) {
+func (e *Engine) GetImposter(ctx context.Context, port uint16, opts ListOptions) (json.RawMessage, error) {
 	body, err := json.Marshal(opts)
 	if err != nil {
 		return nil, err
 	}
 	var out json.RawMessage
-	err = e.withHandle(func(h uintptr) error {
+	err = e.withHandle(ctx, func(h uintptr) error {
 		out, err = e.takeJSON("get imposter", e.sym.getImposter(h, port, string(body)))
 		return err
 	})
@@ -82,25 +83,25 @@ func (e *Engine) GetImposter(port uint16, opts ListOptions) (json.RawMessage, er
 }
 
 // SetImposterEnabled enables or disables an imposter without deleting it.
-func (e *Engine) SetImposterEnabled(port uint16, enabled bool) error {
+func (e *Engine) SetImposterEnabled(ctx context.Context, port uint16, enabled bool) error {
 	flag := int32(0)
 	if enabled {
 		flag = 1
 	}
-	return e.withHandle(func(h uintptr) error {
+	return e.withHandle(ctx, func(h uintptr) error {
 		return e.checkRC("set imposter enabled", e.sym.setImposterEnable(h, port, flag))
 	})
 }
 
 // ApplyConfig applies a whole config document — the `{"imposters":[...]}` envelope — replacing
 // the engine's current state. It returns the engine's reload report.
-func (e *Engine) ApplyConfig(cfg rift.ImpostersConfig) (json.RawMessage, error) {
+func (e *Engine) ApplyConfig(ctx context.Context, cfg rift.ImpostersConfig) (json.RawMessage, error) {
 	body, err := rift.ToJSON(cfg)
 	if err != nil {
 		return nil, err
 	}
 	var out json.RawMessage
-	err = e.withHandle(func(h uintptr) error {
+	err = e.withHandle(ctx, func(h uintptr) error {
 		out, err = e.takeJSON("apply config", e.sym.applyConfig(h, string(body)))
 		return err
 	})
@@ -110,23 +111,23 @@ func (e *Engine) ApplyConfig(cfg rift.ImpostersConfig) (json.RawMessage, error) 
 // --- stubs ---
 
 // ReplaceStubs replaces every stub on an imposter.
-func (e *Engine) ReplaceStubs(port uint16, stubs []rift.Stub) error {
+func (e *Engine) ReplaceStubs(ctx context.Context, port uint16, stubs []rift.Stub) error {
 	body, err := rift.ToJSON(stubs)
 	if err != nil {
 		return err
 	}
-	return e.withHandle(func(h uintptr) error {
+	return e.withHandle(ctx, func(h uintptr) error {
 		return e.checkRC("replace stubs", e.sym.replaceStubs(h, port, string(body)))
 	})
 }
 
 // AddStub inserts a stub at index, or appends when index is negative.
-func (e *Engine) AddStub(port uint16, src rift.StubSource, index int) error {
+func (e *Engine) AddStub(ctx context.Context, port uint16, src rift.StubSource, index int) error {
 	body, err := rift.ToJSON(src.BuildStub())
 	if err != nil {
 		return err
 	}
-	return e.withHandle(func(h uintptr) error {
+	return e.withHandle(ctx, func(h uintptr) error {
 		return e.checkRC("add stub", e.sym.addStub(h, port, string(body), int32(index)))
 	})
 }
@@ -144,13 +145,13 @@ func StubAt(i int) StubRef { return StubRef{Index: &i} }
 func StubByID(id string) StubRef { return StubRef{ID: id} }
 
 // GetStub returns one stub.
-func (e *Engine) GetStub(port uint16, ref StubRef) (json.RawMessage, error) {
+func (e *Engine) GetStub(ctx context.Context, port uint16, ref StubRef) (json.RawMessage, error) {
 	refJSON, err := json.Marshal(ref)
 	if err != nil {
 		return nil, err
 	}
 	var out json.RawMessage
-	err = e.withHandle(func(h uintptr) error {
+	err = e.withHandle(ctx, func(h uintptr) error {
 		out, err = e.takeJSON("get stub", e.sym.getStub(h, port, string(refJSON)))
 		return err
 	})
@@ -158,7 +159,7 @@ func (e *Engine) GetStub(port uint16, ref StubRef) (json.RawMessage, error) {
 }
 
 // UpdateStub replaces one stub in place.
-func (e *Engine) UpdateStub(port uint16, ref StubRef, src rift.StubSource) error {
+func (e *Engine) UpdateStub(ctx context.Context, port uint16, ref StubRef, src rift.StubSource) error {
 	refJSON, err := json.Marshal(ref)
 	if err != nil {
 		return err
@@ -167,28 +168,28 @@ func (e *Engine) UpdateStub(port uint16, ref StubRef, src rift.StubSource) error
 	if err != nil {
 		return err
 	}
-	return e.withHandle(func(h uintptr) error {
+	return e.withHandle(ctx, func(h uintptr) error {
 		return e.checkRC("update stub", e.sym.updateStub(h, port, string(refJSON), string(body)))
 	})
 }
 
 // DeleteStub removes one stub.
-func (e *Engine) DeleteStub(port uint16, ref StubRef) error {
+func (e *Engine) DeleteStub(ctx context.Context, port uint16, ref StubRef) error {
 	refJSON, err := json.Marshal(ref)
 	if err != nil {
 		return err
 	}
-	return e.withHandle(func(h uintptr) error {
+	return e.withHandle(ctx, func(h uintptr) error {
 		return e.checkRC("delete stub", e.sym.deleteStub(h, port, string(refJSON)))
 	})
 }
 
 // StubWarnings returns the engine's stub-overlap analysis: duplicate, shadowed and catch-all
 // stubs. Computed on mutation and cached, so this is a cheap read.
-func (e *Engine) StubWarnings(port uint16) (json.RawMessage, error) {
+func (e *Engine) StubWarnings(ctx context.Context, port uint16) (json.RawMessage, error) {
 	var out json.RawMessage
 	var err error
-	err = e.withHandle(func(h uintptr) error {
+	err = e.withHandle(ctx, func(h uintptr) error {
 		out, err = e.takeJSON("stub warnings", e.sym.stubWarnings(h, port))
 		return err
 	})
@@ -199,10 +200,10 @@ func (e *Engine) StubWarnings(port uint16) (json.RawMessage, error) {
 
 // Recorded returns the imposter's request journal. The imposter must have been created with
 // recording enabled (NewImposter(...).Record()) or the journal is empty.
-func (e *Engine) Recorded(port uint16) ([]rift.RecordedRequest, error) {
+func (e *Engine) Recorded(ctx context.Context, port uint16) ([]rift.RecordedRequest, error) {
 	var raw json.RawMessage
 	var err error
-	if err = e.withHandle(func(h uintptr) error {
+	if err = e.withHandle(ctx, func(h uintptr) error {
 		raw, err = e.takeJSON("recorded requests", e.sym.recorded(h, port))
 		return err
 	}); err != nil {
@@ -216,15 +217,15 @@ func (e *Engine) Recorded(port uint16) ([]rift.RecordedRequest, error) {
 }
 
 // ClearRecorded empties the request journal.
-func (e *Engine) ClearRecorded(port uint16) error {
-	return e.withHandle(func(h uintptr) error {
+func (e *Engine) ClearRecorded(ctx context.Context, port uint16) error {
+	return e.withHandle(ctx, func(h uintptr) error {
 		return e.checkRC("clear recorded", e.sym.clearRecorded(h, port))
 	})
 }
 
 // ClearProxyRecordings drops stubs recorded by proxy responses.
-func (e *Engine) ClearProxyRecordings(port uint16) error {
-	return e.withHandle(func(h uintptr) error {
+func (e *Engine) ClearProxyRecordings(ctx context.Context, port uint16) error {
+	return e.withHandle(ctx, func(h uintptr) error {
 		return e.checkRC("clear proxy recordings", e.sym.clearProxyRecordings(h, port))
 	})
 }
@@ -232,13 +233,13 @@ func (e *Engine) ClearProxyRecordings(port uint16) error {
 // Verify counts journal entries matching a predicate set, evaluated by the engine's own
 // predicate engine rather than client-side. That matters for xpath and inject predicates,
 // which are impractical to reimplement in the SDK.
-func (e *Engine) Verify(port uint16, req rift.VerifyRequest) (rift.VerifyResult, error) {
+func (e *Engine) Verify(ctx context.Context, port uint16, req rift.VerifyRequest) (rift.VerifyResult, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return rift.VerifyResult{}, err
 	}
 	var raw json.RawMessage
-	if err := e.withHandle(func(h uintptr) error {
+	if err := e.withHandle(ctx, func(h uintptr) error {
 		raw, err = e.takeJSON("verify", e.sym.verify(h, port, string(body)))
 		return err
 	}); err != nil {
@@ -255,10 +256,10 @@ func (e *Engine) Verify(port uint16, req rift.VerifyRequest) (rift.VerifyResult,
 // --- scenarios ---
 
 // Scenarios returns the scenario states for an imposter, optionally scoped to a flow.
-func (e *Engine) Scenarios(port uint16, flowID string) (json.RawMessage, error) {
+func (e *Engine) Scenarios(ctx context.Context, port uint16, flowID string) (json.RawMessage, error) {
 	var out json.RawMessage
 	var err error
-	err = e.withHandle(func(h uintptr) error {
+	err = e.withHandle(ctx, func(h uintptr) error {
 		out, err = e.takeJSON("scenarios", e.sym.scenarios(h, port, flowID))
 		return err
 	})
@@ -266,16 +267,16 @@ func (e *Engine) Scenarios(port uint16, flowID string) (json.RawMessage, error) 
 }
 
 // SetScenarioState forces a scenario into a state.
-func (e *Engine) SetScenarioState(port uint16, scenario, state, flowID string) error {
-	return e.withHandle(func(h uintptr) error {
+func (e *Engine) SetScenarioState(ctx context.Context, port uint16, scenario, state, flowID string) error {
+	return e.withHandle(ctx, func(h uintptr) error {
 		return e.checkRC("set scenario state",
 			e.sym.setScenarioState(h, port, scenario, state, flowID))
 	})
 }
 
 // ResetScenarios returns every scenario to its start state.
-func (e *Engine) ResetScenarios(port uint16, flowID string) error {
-	return e.withHandle(func(h uintptr) error {
+func (e *Engine) ResetScenarios(ctx context.Context, port uint16, flowID string) error {
+	return e.withHandle(ctx, func(h uintptr) error {
 		return e.checkRC("reset scenarios", e.sym.resetScenarios(h, port, flowID))
 	})
 }
@@ -286,21 +287,21 @@ func (e *Engine) ResetScenarios(port uint16, flowID string) error {
 // stay isolated, partitioned by flow id.
 
 // SpaceAddStub adds a stub scoped to one flow.
-func (e *Engine) SpaceAddStub(port uint16, flowID string, src rift.StubSource) error {
+func (e *Engine) SpaceAddStub(ctx context.Context, port uint16, flowID string, src rift.StubSource) error {
 	body, err := rift.ToJSON(src.BuildStub())
 	if err != nil {
 		return err
 	}
-	return e.withHandle(func(h uintptr) error {
+	return e.withHandle(ctx, func(h uintptr) error {
 		return e.checkRC("space add stub", e.sym.spaceAddStub(h, port, flowID, string(body)))
 	})
 }
 
 // SpaceListStubs returns the stubs scoped to one flow.
-func (e *Engine) SpaceListStubs(port uint16, flowID string) (json.RawMessage, error) {
+func (e *Engine) SpaceListStubs(ctx context.Context, port uint16, flowID string) (json.RawMessage, error) {
 	var out json.RawMessage
 	var err error
-	err = e.withHandle(func(h uintptr) error {
+	err = e.withHandle(ctx, func(h uintptr) error {
 		out, err = e.takeJSON("space list stubs", e.sym.spaceListStubs(h, port, flowID))
 		return err
 	})
@@ -308,17 +309,17 @@ func (e *Engine) SpaceListStubs(port uint16, flowID string) (json.RawMessage, er
 }
 
 // SpaceDelete removes a flow's space and everything in it.
-func (e *Engine) SpaceDelete(port uint16, flowID string) error {
-	return e.withHandle(func(h uintptr) error {
+func (e *Engine) SpaceDelete(ctx context.Context, port uint16, flowID string) error {
+	return e.withHandle(ctx, func(h uintptr) error {
 		return e.checkRC("space delete", e.sym.spaceDelete(h, port, flowID))
 	})
 }
 
 // SpaceRecorded returns the request journal scoped to one flow.
-func (e *Engine) SpaceRecorded(port uint16, flowID string) ([]rift.RecordedRequest, error) {
+func (e *Engine) SpaceRecorded(ctx context.Context, port uint16, flowID string) ([]rift.RecordedRequest, error) {
 	var raw json.RawMessage
 	var err error
-	if err = e.withHandle(func(h uintptr) error {
+	if err = e.withHandle(ctx, func(h uintptr) error {
 		raw, err = e.takeJSON("space recorded", e.sym.spaceRecorded(h, port, flowID))
 		return err
 	}); err != nil {
@@ -332,10 +333,10 @@ func (e *Engine) SpaceRecorded(port uint16, flowID string) ([]rift.RecordedReque
 }
 
 // FlowStateGet reads one key from a flow's state bag.
-func (e *Engine) FlowStateGet(port uint16, flowID, key string) (json.RawMessage, error) {
+func (e *Engine) FlowStateGet(ctx context.Context, port uint16, flowID, key string) (json.RawMessage, error) {
 	var out json.RawMessage
 	var err error
-	err = e.withHandle(func(h uintptr) error {
+	err = e.withHandle(ctx, func(h uintptr) error {
 		out, err = e.takeJSON("flow state get", e.sym.flowStateGet(h, port, flowID, key))
 		return err
 	})
@@ -343,15 +344,15 @@ func (e *Engine) FlowStateGet(port uint16, flowID, key string) (json.RawMessage,
 }
 
 // FlowStatePut writes one key into a flow's state bag.
-func (e *Engine) FlowStatePut(port uint16, flowID, key, value string) error {
-	return e.withHandle(func(h uintptr) error {
+func (e *Engine) FlowStatePut(ctx context.Context, port uint16, flowID, key, value string) error {
+	return e.withHandle(ctx, func(h uintptr) error {
 		return e.checkRC("flow state put", e.sym.flowStatePut(h, port, flowID, key, value))
 	})
 }
 
 // FlowStateDelete drops a flow's entire state bag.
-func (e *Engine) FlowStateDelete(port uint16, flowID string) error {
-	return e.withHandle(func(h uintptr) error {
+func (e *Engine) FlowStateDelete(ctx context.Context, port uint16, flowID string) error {
+	return e.withHandle(ctx, func(h uintptr) error {
 		return e.checkRC("flow state delete", e.sym.flowStateDelete(h, port, flowID))
 	})
 }
@@ -370,13 +371,13 @@ type ServeOptions struct {
 //
 // Note: a blank or whitespace APIKey is rejected by current engines rather than silently
 // enabling a gate that authenticates everyone. Leave it empty to run without an API key.
-func (e *Engine) ServeAdmin(opts ServeOptions) (json.RawMessage, error) {
+func (e *Engine) ServeAdmin(ctx context.Context, opts ServeOptions) (json.RawMessage, error) {
 	body, err := json.Marshal(opts)
 	if err != nil {
 		return nil, err
 	}
 	var out json.RawMessage
-	err = e.withHandle(func(h uintptr) error {
+	err = e.withHandle(ctx, func(h uintptr) error {
 		out, err = e.takeJSON("serve admin", e.sym.serveAdmin(h, string(body)))
 		return err
 	})

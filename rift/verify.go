@@ -21,12 +21,31 @@ type VerifyRequest struct {
 
 // VerifyResult is the engine's answer.
 type VerifyResult struct {
+	// Matched counts recorded requests satisfying every predicate.
 	Matched int `json:"matched"`
-	Total   int `json:"total"`
+	// Total counts recorded requests in scope, matched or not.
+	Total int `json:"total"`
 	// Requests is populated when IncludeRequests was set.
 	Requests []RecordedRequest `json:"requests,omitempty"`
-	// Closest is populated when IncludeClosest was set and nothing matched.
-	Closest []RecordedRequest `json:"closest,omitempty"`
+	// Closest is populated when IncludeClosest was set: the non-matching request that satisfied
+	// the most clauses, and which clauses it failed.
+	Closest *ClosestMatch `json:"closest,omitempty"`
+}
+
+// ClosestMatch is the near miss — the recorded request that came closest to matching, with the
+// predicates it failed. This is what turns "expected 1, got 0" into an explanation.
+type ClosestMatch struct {
+	Request          RecordedRequest   `json:"request"`
+	FailedPredicates []FailedPredicate `json:"failedPredicates"`
+}
+
+// FailedPredicate pairs a predicate the closest request did not satisfy with the request's
+// actual value for the fields that predicate references.
+type FailedPredicate struct {
+	Predicate Predicate `json:"predicate"`
+	// Actual is the request's value for the referenced field(s) — free-form, because its shape
+	// follows the predicate's.
+	Actual JSON `json:"actual"`
 }
 
 // CountMatcher constrains how many matches a verification expects.
