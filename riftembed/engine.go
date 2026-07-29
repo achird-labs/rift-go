@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"runtime"
 	"strings"
-	"unsafe"
 	"sync"
+	"unsafe"
 
 	"github.com/achird-labs/rift-go/rift"
 )

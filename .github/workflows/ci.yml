@@ -9,13 +9,13 @@ permissions:
   contents: read
 
 env:
-  # The engine release whose cdylib and conformance corpus this SDK is tested against.
+  # The engine release whose cdylib, binary and conformance corpus this SDK is tested against.
   # Corpus version == engine release version; they move together.
-  RIFT_VERSION: "0.1.0"
+  RIFT_VERSION: "v0.16.0"
 
 jobs:
   # Unit tests and the DSL-expressibility gate need no engine, so they run everywhere and stay
-  # fast. The gate is the part that catches DSL drift, and it is pure model logic.
+  # fast. That gate is what catches DSL drift, and it is pure model logic.
   check:
     name: lint + unit (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -26,10 +26,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # go-version-file, not a pinned version: gofmt ships with the toolchain and its behaviour
+      # differs between releases (1.26 stopped reordering imports that 1.24 reorders). Pinning CI
+      # to a version other than go.mod's floor means the formatter that gates the build is not the
+      # formatter the go command uses.
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.24"
-          check-latest: true
+          go-version-file: go.mod
 
       - name: gofmt
         if: runner.os != 'Windows'
@@ -47,8 +50,8 @@ jobs:
         with:
           version: latest
 
-      # The whole point of the purego binding: a consumer's build is unaffected. Proving it
-      # builds without cgo is cheap and it is the claim most worth pinning.
+      # The whole point of the purego binding: a consumer's build is unaffected. Proving it builds
+      # without cgo is cheap and it is the claim most worth pinning.
       - name: build with CGO_ENABLED=0
         env:
           CGO_ENABLED: "0"
@@ -58,7 +61,7 @@ jobs:
         run: go test -race -count=1 ./rift/... ./riftembed/... ./rifttest/... ./riftfetch/...
 
   # The engine-backed lanes: the C-ABI binding, intercept, and the corpus replay on both
-  # transports. These need the native library and the corpus, so they are a separate job.
+  # transports. These need the native library, the engine binary and the corpus.
   conformance:
     name: conformance (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -71,49 +74,55 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.24"
-          check-latest: true
+          go-version-file: go.mod
 
       - name: download the engine release assets
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          mkdir -p natives corpus-archive
+          mkdir -p natives dist
 
-          case "${{ runner.os }}" in
-            Linux) lib=librift_ffi.so ;;
-            macOS) lib=librift_ffi.dylib ;;
+          # Release assets are named by C-style classifier (x86_64/aarch64), which is not Go's
+          # spelling — the same bridge riftfetch.Platform makes at runtime.
+          case "${{ runner.os }}-${{ runner.arch }}" in
+            Linux-X64)   lib=librift_ffi-linux-x86_64.so;      triple=x86_64-unknown-linux-gnu ;;
+            Linux-ARM64) lib=librift_ffi-linux-aarch64.so;     triple=aarch64-unknown-linux-gnu ;;
+            macOS-ARM64) lib=librift_ffi-darwin-aarch64.dylib; triple=aarch64-apple-darwin ;;
+            macOS-X64)   lib=librift_ffi-darwin-x86_64.dylib;  triple=x86_64-apple-darwin ;;
+            *) echo "::error::unsupported runner ${{ runner.os }}-${{ runner.arch }}"; exit 1 ;;
           esac
 
-          gh release download "v${RIFT_VERSION}" \
-            --repo achird-labs/rift \
+          gh release download "$RIFT_VERSION" --repo achird-labs/rift --dir dist \
             --pattern "$lib" \
-            --pattern "rift" \
-            --pattern "sdk-conformance-${RIFT_VERSION}.tar.gz" \
-            --dir corpus-archive
+            --pattern "rift-$RIFT_VERSION-$triple.tar.gz" \
+            --pattern "sdk-conformance-$RIFT_VERSION.tar.gz"
 
-          mv "corpus-archive/$lib" natives/
-          mv corpus-archive/rift ./rift-engine && chmod +x ./rift-engine
-          tar -xzf "corpus-archive/sdk-conformance-${RIFT_VERSION}.tar.gz" -C corpus-archive
+          mv "dist/$lib" natives/
+          tar -xzf "dist/rift-$RIFT_VERSION-$triple.tar.gz" -C dist
+          tar -xzf "dist/sdk-conformance-$RIFT_VERSION.tar.gz" -C dist
+
+          # Neither archive's internal layout is contractual, so locate rather than assume.
+          engine=$(find dist -type f -name rift -perm -u+x | head -1)
+          [ -n "$engine" ] || { echo "::error::no rift binary in the release tarball"; exit 1; }
+          corpus=$(dirname "$(find dist -type f -name manifest.json | head -1)")
+          [ -n "$corpus" ] || { echo "::error::no manifest.json in the corpus tarball"; exit 1; }
 
           echo "RIFT_FFI_LIB=$PWD/natives/$lib" >> "$GITHUB_ENV"
-          echo "RIFT_BINARY=$PWD/rift-engine" >> "$GITHUB_ENV"
-          echo "RIFT_CORPUS_DIR=$PWD/corpus-archive/sdk-conformance-${RIFT_VERSION}" >> "$GITHUB_ENV"
+          echo "RIFT_BINARY=$PWD/$engine" >> "$GITHUB_ENV"
+          echo "RIFT_CORPUS_DIR=$PWD/$corpus" >> "$GITHUB_ENV"
 
-      - name: embedded + intercept
+      - name: embedded engine + intercept
         run: go test -race -count=1 -v ./riftembed/...
 
-      # Both lanes are required here. A fixture may be skipped only when the manifest's
-      # `requires` names a capability this lane lacks — never for any other reason — so a silent
-      # skip of everything would pass. Fail if nothing actually ran.
+      # Both lanes are required. A fixture may be skipped only when the manifest's `requires`
+      # names a capability this lane lacks — never for any other reason — so a run that silently
+      # skipped everything would still report green. Assert both lanes actually ran.
       - name: corpus replay, both transports
         run: |
           set -euo pipefail
           go test -count=1 -v ./conformance/... 2>&1 | tee conformance.log
-          if ! grep -q -- "--- PASS: TestServeAndReplay/embedded" conformance.log; then
-            echo "::error::the embedded conformance lane did not run"; exit 1
-          fi
-          if ! grep -q -- "--- PASS: TestServeAndReplay/remote" conformance.log; then
-            echo "::error::the remote conformance lane did not run"; exit 1
-          fi
+          for lane in embedded remote; do
+            grep -q -- "--- PASS: TestServeAndReplay/$lane" conformance.log \
+              || { echo "::error::the $lane conformance lane did not run"; exit 1; }
+          done

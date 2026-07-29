@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/achird-labs/rift-go/rift"
-	"github.com/achird-labs/rift-go/rifttest"
 	"github.com/achird-labs/rift-go/riftembed"
+	"github.com/achird-labs/rift-go/rifttest"
 )
 
 // skipWithoutEngine keeps the suite green on a machine with no native library while still
