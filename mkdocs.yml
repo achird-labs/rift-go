@@ -1,0 +1,39 @@
+site_name: rift-go
+site_description: Official Go SDK for Rift — a Mountebank-compatible HTTP/HTTPS mock server
+site_url: https://achird-labs.github.io/rift-go/
+repo_url: https://github.com/achird-labs/rift-go
+repo_name: achird-labs/rift-go
+docs_dir: docs
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle: { icon: material/brightness-7, name: Switch to dark mode }
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle: { icon: material/brightness-4, name: Switch to light mode }
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - search.highlight
+markdown_extensions:
+  - admonition
+  - toc:
+      permalink: true
+  - pymdownx.superfences
+  - pymdownx.highlight
+  - pymdownx.inlinehilite
+nav:
+  - Home: index.md
+  - Guides:
+      - Embedded engine (no cgo): embedded.md
+      - Transports: transports.md
+      - Building imposters: dsl.md
+      - Testing with rifttest: testing.md
+      - Intercept (TLS-MITM): intercept.md
+      - Native library & CI: natives.md
+  - Reference:
+      - Conformance: conformance.md
+      - Errors: errors.md

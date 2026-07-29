@@ -2,3 +2,6 @@ natives/
 *.dylib
 *.so
 *.dll
+
+# mkdocs build output
+site/
