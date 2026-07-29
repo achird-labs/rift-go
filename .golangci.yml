@@ -1,0 +1,43 @@
+version: "2"
+
+linters:
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - bodyclose
+    - errorlint
+    - gosec
+    - misspell
+    - revive
+    - unconvert
+    - usetesting
+
+  settings:
+    revive:
+      rules:
+        - name: exported
+          # Every exported symbol in an SDK is someone's first encounter with it.
+          arguments: [checkPrivateReceivers, disableStutteringCheck]
+    errorlint:
+      errorf: true
+      asserts: true
+      comparison: true
+
+  exclusions:
+    rules:
+      # riftembed is a foreign-function boundary: unsafe pointer work is the job, and the
+      # ownership discipline is enforced by review and by takeString being the only reader.
+      - path: riftembed/
+        linters: [gosec]
+        text: "G103"
+      # Tests make short-lived requests to loopback imposters; a context adds noise without
+      # adding safety there.
+      - path: _test\.go
+        linters: [noctx, bodyclose]
+
+formatters:
+  enable:
+    - gofmt
