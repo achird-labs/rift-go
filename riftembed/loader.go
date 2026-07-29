@@ -49,7 +49,21 @@ func CacheDir() string {
 }
 
 // platformTag is the cache subdirectory for the running platform, e.g. "darwin-arm64".
+//
+// This is Go's own GOOS-GOARCH spelling, which is deliberately *not* the release-asset
+// classifier ("darwin-aarch64"). The cache is keyed by what Go calls the platform because that
+// is what the loader can compute with certainty; translating to the release naming is the
+// fetcher's job, in one place.
 func platformTag() string { return runtime.GOOS + "-" + runtime.GOARCH }
+
+// CachePath is where the loader expects this platform's library inside the cache.
+//
+// A fetcher writes here and the loader reads here; exporting the single computation keeps the
+// two from drifting apart, which is a failure that would only show up as "no library found"
+// after a successful download.
+func CachePath() string {
+	return filepath.Join(CacheDir(), platformTag(), platformLibNames()[0])
+}
 
 // resolveLibrary finds the native library, in order:
 //

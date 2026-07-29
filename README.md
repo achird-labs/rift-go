@@ -41,6 +41,7 @@ wait. Starting a mock is a function call.
 | `rift` | typed wire model, chainable builders, `Connect` (admin API) and `Spawn` (managed binary) transports |
 | `riftembed` | in-process engine over the C ABI, plus TLS-MITM intercept |
 | `rifttest` | `testing.T` helpers: shared engine, `t.Cleanup` teardown, request assertions |
+| `riftfetch` + `cmd/rift-fetch` | download and SHA-256-verify the native library |
 | `conformance` | replays the SDK conformance corpus — the DSL↔engine parity gate |
 
 ## Transports
@@ -66,6 +67,22 @@ reaches out to the network is a bad default, and explicit fetching is what makes
 air-gapped hosts predictable.
 
 `riftembed.LibraryPath()` reports what it would load, and its error lists every path tried.
+
+To populate the cache:
+
+```sh
+go run github.com/achird-labs/rift-go/cmd/rift-fetch@latest -version v0.1.0
+```
+
+Every download is verified against the SHA-256 the release manifest publishes, and there is no
+flag to skip it — an unverified shared library is one you are about to load into your own
+process. A mismatch installs nothing.
+
+```sh
+rift-fetch -version v0.1.0 -platform linux-x86_64-musl   # Alpine: Go cannot detect musl
+RIFT_RELEASE_BASE=https://mirror.internal/rift \
+  rift-fetch -version v0.1.0                             # air-gapped mirror
+```
 
 ## The DSL
 
@@ -148,11 +165,11 @@ RIFT_CORPUS_DIR=/path/to/sdk-conformance go test ./conformance/...
 
 ## Status
 
-Milestone M5. Implemented: wire model and DSL, all three transports, the full C-ABI surface,
-`rifttest`, intercept, and corpus conformance on the embedded and remote lanes.
+Milestone M5 is feature-complete: wire model and DSL, all three transports, the full C-ABI
+surface, `rifttest`, intercept, `rift-fetch`, and corpus conformance on the embedded and remote
+lanes.
 
-Not yet: `cmd/rift-fetch` (the loader's error tells you what to install in the meantime), and
-published release tags.
+Not yet: a published release tag. Until one exists, depend on this by commit rather than version.
 
 ## Licence
 
