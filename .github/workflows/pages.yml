@@ -1,0 +1,48 @@
+name: Docs
+
+# Build the documentation site with MkDocs Material and publish it to GitHub Pages. Pushes to
+# master deploy; pull requests build only (with --strict, so a broken internal link fails the
+# check rather than shipping a dead link).
+on:
+  push:
+    branches: [master]
+    paths: ['docs/**', 'mkdocs.yml', '.github/workflows/pages.yml']
+  pull_request:
+    paths: ['docs/**', 'mkdocs.yml', '.github/workflows/pages.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install mkdocs-material
+      - run: mkdocs build --strict
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    # Only deploy from master; PRs stop at the strict build above.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4
