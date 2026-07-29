@@ -9,8 +9,6 @@ import (
 	"github.com/ebitengine/purego"
 )
 
-func libSuffixes() []string { return platformLibNames() }
-
 // dlopen loads the DLL. purego binds against a Windows module handle the same way it binds
 // against a dlopen handle, so the rest of the package is platform-independent.
 func dlopen(path string) (uintptr, error) {

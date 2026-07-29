@@ -45,10 +45,12 @@ jobs:
       - name: go vet
         run: go vet ./...
 
-      - uses: golangci/golangci-lint-action@v6
+      # v8 installs golangci-lint v2, which is what .golangci.yml is written against. The v6
+      # action tops out at v1.x and rejects the v2 schema outright.
+      - uses: golangci/golangci-lint-action@v8
         if: runner.os == 'Linux'
         with:
-          version: latest
+          version: v2.12.2
 
       # The whole point of the purego binding: a consumer's build is unaffected. Proving it builds
       # without cgo is cheap and it is the claim most worth pinning.

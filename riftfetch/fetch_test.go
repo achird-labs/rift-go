@@ -40,7 +40,7 @@ func newFakeRelease(t *testing.T, payload []byte, corruptSHA bool) *fakeRelease 
 
 	mux := http.NewServeMux()
 	fr.Server = httptest.NewServer(mux)
-	t.Cleanup(fr.Server.Close)
+	t.Cleanup(fr.Close)
 
 	mux.HandleFunc("/v9.9.9/ffi-manifest.json", func(w http.ResponseWriter, _ *http.Request) {
 		m := riftfetch.Manifest{
@@ -50,7 +50,7 @@ func newFakeRelease(t *testing.T, payload []byte, corruptSHA bool) *fakeRelease 
 				Platform: fr.platform,
 				File:     "librift_ffi-test.so",
 				SHA256:   declared,
-				URL:      fr.Server.URL + "/v9.9.9/librift_ffi-test.so",
+				URL:      fr.URL + "/v9.9.9/librift_ffi-test.so",
 			}},
 		}
 		_ = json.NewEncoder(w).Encode(m)
@@ -65,8 +65,8 @@ func newFakeRelease(t *testing.T, payload []byte, corruptSHA bool) *fakeRelease 
 // pointAtFakeRelease makes the fetcher resolve everything through the test server.
 func pointAtFakeRelease(t *testing.T, fr *fakeRelease) {
 	t.Helper()
-	t.Setenv(riftfetch.EnvManifestURL, fr.Server.URL+"/v9.9.9/ffi-manifest.json")
-	t.Setenv(riftfetch.EnvReleaseBase, fr.Server.URL)
+	t.Setenv(riftfetch.EnvManifestURL, fr.URL+"/v9.9.9/ffi-manifest.json")
+	t.Setenv(riftfetch.EnvReleaseBase, fr.URL)
 }
 
 func TestFetchDownloadsAndVerifies(t *testing.T) {

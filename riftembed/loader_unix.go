@@ -8,11 +8,6 @@ import (
 	"github.com/ebitengine/purego"
 )
 
-// libSuffixes are the platform's shared-library file names, most specific first.
-func libSuffixes() []string {
-	return platformLibNames()
-}
-
 // dlopen loads the shared library at path.
 func dlopen(path string) (uintptr, error) {
 	lib, err := purego.Dlopen(path, purego.RTLD_NOW|purego.RTLD_GLOBAL)

@@ -20,10 +20,8 @@ type StubBuilder struct {
 	fields []fieldMatcher
 	// raw predicates are appended after the grouped field predicates, preserving the order
 	// the caller added them.
-	raw   []Predicate
-	stub  Stub
-	errs  []error
-	built bool
+	raw  []Predicate
+	stub Stub
 }
 
 // On starts a stub matching an exact method and path.
@@ -34,13 +32,23 @@ func On(method, path string) *StubBuilder {
 	}}
 }
 
-// OnGet, OnPost, OnPut, OnPatch, OnDelete and OnHead start a stub for the named method.
-func OnGet(path string) *StubBuilder    { return On("GET", path) }
-func OnPost(path string) *StubBuilder   { return On("POST", path) }
-func OnPut(path string) *StubBuilder    { return On("PUT", path) }
-func OnPatch(path string) *StubBuilder  { return On("PATCH", path) }
+// OnGet starts a stub matching GET on an exact path.
+func OnGet(path string) *StubBuilder { return On("GET", path) }
+
+// OnPost starts a stub matching POST on an exact path.
+func OnPost(path string) *StubBuilder { return On("POST", path) }
+
+// OnPut starts a stub matching PUT on an exact path.
+func OnPut(path string) *StubBuilder { return On("PUT", path) }
+
+// OnPatch starts a stub matching PATCH on an exact path.
+func OnPatch(path string) *StubBuilder { return On("PATCH", path) }
+
+// OnDelete starts a stub matching DELETE on an exact path.
 func OnDelete(path string) *StubBuilder { return On("DELETE", path) }
-func OnHead(path string) *StubBuilder   { return On("HEAD", path) }
+
+// OnHead starts a stub matching HEAD on an exact path.
+func OnHead(path string) *StubBuilder { return On("HEAD", path) }
 
 // OnAny starts a stub with no predicates — a catch-all that matches every request.
 func OnAny() *StubBuilder { return &StubBuilder{} }

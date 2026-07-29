@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 
 	"github.com/achird-labs/rift-go/rift"
 )
@@ -122,13 +123,24 @@ func (e *Engine) ReplaceStubs(ctx context.Context, port uint16, stubs []rift.Stu
 }
 
 // AddStub inserts a stub at index, or appends when index is negative.
+//
+// Note the ordering contract: the engine serves the first stub whose predicates match, so a stub
+// appended behind an existing catch-all is unreachable.
 func (e *Engine) AddStub(ctx context.Context, port uint16, src rift.StubSource, index int) error {
 	body, err := rift.ToJSON(src.BuildStub())
 	if err != nil {
 		return err
 	}
+	// The C ABI takes an int32. Truncation would not error — it would wrap, inserting the stub
+	// at an arbitrary position, or turning a negative "append" into a positive index. Both
+	// bounds matter for that reason.
+	if index > math.MaxInt32 || index < math.MinInt32 {
+		return fmt.Errorf("%w: stub index %d is outside the C ABI's int32 range",
+			rift.ErrInvalidDefinition, index)
+	}
+	idx := int32(index) //nolint:gosec // bounds checked immediately above
 	return e.withHandle(ctx, func(h uintptr) error {
-		return e.checkRC("add stub", e.sym.addStub(h, port, string(body), int32(index)))
+		return e.checkRC("add stub", e.sym.addStub(h, port, string(body), idx))
 	})
 }
 

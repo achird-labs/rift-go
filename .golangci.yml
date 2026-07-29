@@ -2,17 +2,18 @@ version: "2"
 
 linters:
   enable:
-    - errcheck
-    - govet
-    - ineffassign
-    - staticcheck
-    - unused
     - bodyclose
+    - errcheck
     - errorlint
     - gosec
+    - govet
+    - ineffassign
     - misspell
+    - noctx
     - revive
+    - staticcheck
     - unconvert
+    - unused
     - usetesting
 
   settings:
@@ -28,15 +29,47 @@ linters:
 
   exclusions:
     rules:
-      # riftembed is a foreign-function boundary: unsafe pointer work is the job, and the
-      # ownership discipline is enforced by review and by takeString being the only reader.
+      # json.go is twelve mechanical MarshalJSON/UnmarshalJSON pairs implementing the escape-hatch
+      # round-trip. The file header explains the pattern once, in detail; twenty-four near-identical
+      # "implements json.Marshaler" comments would make it harder to read, not easier.
+      - path: rift/json\.go
+        linters: [revive]
+        text: "exported: exported method .*(Marshal|Unmarshal)JSON"
+
+      # BuildImposter/BuildStub/BuildResponse exist only to satisfy the Source interfaces, which
+      # are documented at their declaration. A per-method comment would restate that.
+      - linters: [revive]
+        text: "exported: exported method .*\\.Build(Imposter|Stub|Response) should have comment"
+
+      # The loader's os.Stat walks a fixed discovery list this package constructs — env var,
+      # cache dir, ./natives — not attacker-controlled input. Reporting the *paths tried* is the
+      # feature; that is what makes a missing library diagnosable.
+      - path: riftembed/loader\.go
+        linters: [gosec]
+        text: "G703"
+
+      # ServeOptions.APIKey is an API key by design: it is the field that carries one to the
+      # engine. gosec flags the name, not a leak.
+      - path: riftembed/ops\.go
+        linters: [gosec]
+        text: "G117"
+
+      # A shared library must be readable and executable by the process that dlopens it, and the
+      # cache directory traversable. 0600/0750 would make the download useless.
+      - path: riftfetch/fetch\.go
+        linters: [gosec]
+        text: "G30[12]"
+
+      # Tests make short-lived requests to loopback imposters they just created, and write
+      # fixture files into t.TempDir. A context and 0600 add noise without adding safety.
+      - path: _test\.go
+        linters: [gosec, noctx, bodyclose]
+
+      # riftembed is a foreign-function boundary: unsafe pointer work is the job. The ownership
+      # discipline is enforced by takeString being the only reader of an owned char*.
       - path: riftembed/
         linters: [gosec]
         text: "G103"
-      # Tests make short-lived requests to loopback imposters; a context adds noise without
-      # adding safety there.
-      - path: _test\.go
-        linters: [noctx, bodyclose]
 
 formatters:
   enable:

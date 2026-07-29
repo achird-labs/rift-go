@@ -96,7 +96,7 @@ func Spawn(ctx context.Context, opts SpawnOptions) (*Remote, error) {
 
 	port := opts.AdminPort
 	if port == 0 {
-		if port, err = freePort(); err != nil {
+		if port, err = freePort(ctx); err != nil {
 			return nil, err
 		}
 	}
@@ -107,8 +107,10 @@ func Spawn(ctx context.Context, opts SpawnOptions) (*Remote, error) {
 	}
 	args = append(args, opts.Args...)
 
-	// Deliberately exec.Command, not exec.CommandContext — see the lifetime note above.
-	cmd := exec.Command(bin, args...) //nolint:gosec // path is caller-supplied by design
+	// Deliberately exec.Command, not exec.CommandContext — see the lifetime note above. The
+	// engine must outlive ctx; tying it to a startup deadline is the bug this avoids.
+	//nolint:gosec,noctx // binary path is caller-supplied by design; process lifetime is owned by Close
+	cmd := exec.Command(bin, args...)
 	cmd.Dir = opts.Dir
 	cmd.Env = opts.Env
 	cmd.Stdout = opts.Stdout
@@ -166,7 +168,9 @@ func waitReady(ctx context.Context, r *Remote, p *process, timeout time.Duration
 		}
 
 		if time.Now().After(deadline) {
-			return fmt.Errorf("%w: engine did not become ready within %s (last error: %v)",
+			// Wrap the last ping failure rather than formatting it: a caller diagnosing a
+			// startup timeout usually wants to match on what the probe actually hit.
+			return fmt.Errorf("%w: engine did not become ready within %s (last error: %w)",
 				ErrEngineUnavailable, timeout, err)
 		}
 		time.Sleep(backoff)
@@ -269,8 +273,9 @@ func findBinary(explicit string) (string, error) {
 // freePort asks the OS for an unused TCP port. There is an unavoidable race between closing the
 // listener and the child binding it; in practice the window is microseconds and the alternative
 // (a fixed port) collides far more often under parallel tests.
-func freePort() (uint16, error) {
-	l, err := net.Listen("tcp", "127.0.0.1:0")
+func freePort(ctx context.Context) (uint16, error) {
+	var lc net.ListenConfig
+	l, err := lc.Listen(ctx, "tcp", "127.0.0.1:0")
 	if err != nil {
 		return 0, fmt.Errorf("%w: reserve an admin port: %w", ErrEngineUnavailable, err)
 	}
