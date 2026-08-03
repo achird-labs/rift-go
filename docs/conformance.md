@@ -39,8 +39,8 @@ RIFT_CORPUS_DIR=/path/to/sdk-conformance go test ./conformance/...
 The corpus is a release asset, version-locked to the engine:
 
 ```sh
-gh release download v0.16.0 --repo achird-labs/rift --pattern 'sdk-conformance-v0.16.0.tar.gz'
-tar -xzf sdk-conformance-v0.16.0.tar.gz
+gh release download v0.17.0 --repo achird-labs/rift --pattern 'sdk-conformance-v0.17.0.tar.gz'
+tar -xzf sdk-conformance-v0.17.0.tar.gz
 ```
 
 Resolution order: an explicit directory, `$RIFT_CORPUS_DIR`, then a sibling checkout of the engine
