@@ -11,7 +11,7 @@ permissions:
 env:
   # The engine release whose cdylib, binary and conformance corpus this SDK is tested against.
   # Corpus version == engine release version; they move together.
-  RIFT_VERSION: "v0.16.0"
+  RIFT_VERSION: "v0.17.0"
 
 jobs:
   # Unit tests and the DSL-expressibility gate need no engine, so they run everywhere and stay

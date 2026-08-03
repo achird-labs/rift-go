@@ -27,7 +27,7 @@ go get github.com/achird-labs/rift-go
 Then fetch the native library once (see [Native library & CI](natives.md)):
 
 ```sh
-go run github.com/achird-labs/rift-go/cmd/rift-fetch@latest -version v0.16.0
+go run github.com/achird-labs/rift-go/cmd/rift-fetch@latest -version v0.17.0
 ```
 
 ## Why in-process

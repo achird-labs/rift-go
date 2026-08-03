@@ -99,7 +99,7 @@ against an engine it is about to close.
 
 ```go
 info, _ := eng.BuildInfo()
-// {"version":"0.16.0","commit":"…","features":["redis-backend","javascript"],
+// {"version":"0.17.0","commit":"…","features":["redis-backend","javascript"],
 //  "serveOptions":["host","port","apiKey",…]}
 ```
 

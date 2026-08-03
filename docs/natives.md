@@ -5,7 +5,7 @@ The [embedded transport](embedded.md) needs the Rift shared library. `Connect` a
 ## Fetching it
 
 ```sh
-go run github.com/achird-labs/rift-go/cmd/rift-fetch@latest -version v0.16.0
+go run github.com/achird-labs/rift-go/cmd/rift-fetch@latest -version v0.17.0
 ```
 
 That downloads the right artifact for your platform, verifies it, and installs it where
@@ -55,7 +55,7 @@ the two, but the mapping is worth knowing when reading a release page:
 Go cannot distinguish musl from glibc at runtime, so it has to be declared:
 
 ```sh
-rift-fetch -version v0.16.0 -platform linux-x86_64-musl
+rift-fetch -version v0.17.0 -platform linux-x86_64-musl
 ```
 
 Guessing would be worse than asking: the wrong library loads and then misbehaves.
@@ -63,7 +63,7 @@ Guessing would be worse than asking: the wrong library loads and then misbehaves
 ## Air-gapped hosts and mirrors
 
 ```sh
-RIFT_RELEASE_BASE=https://mirror.internal/rift rift-fetch -version v0.16.0
+RIFT_RELEASE_BASE=https://mirror.internal/rift rift-fetch -version v0.17.0
 ```
 
 The manifest is read from `<base>/<version>/ffi-manifest.json` and each artifact URL has its base
@@ -83,7 +83,7 @@ rewritten to match, so mirroring the release assets is enough — the manifest d
 
 ```go
 res, err := riftfetch.Fetch(ctx, riftfetch.Options{
-	Version: "v0.16.0",
+	Version: "v0.17.0",
 	Log:     func(f string, a ...any) { log.Printf(f, a...) },
 })
 // res.Path, res.Cached
@@ -98,7 +98,7 @@ all three assets from it:
 - name: fetch the engine assets
   env:
     GH_TOKEN: ${{ github.token }}
-    RIFT_VERSION: v0.16.0
+    RIFT_VERSION: v0.17.0
   run: |
     set -euo pipefail
     mkdir -p natives dist
