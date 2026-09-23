@@ -71,7 +71,7 @@ air-gapped hosts predictable.
 To populate the cache:
 
 ```sh
-go run github.com/achird-labs/rift-go/cmd/rift-fetch@latest -version v0.1.0
+go run github.com/achird-labs/rift-go/cmd/rift-fetch@latest -version v0.18.0
 ```
 
 Every download is verified against the SHA-256 the release manifest publishes, and there is no
@@ -79,9 +79,9 @@ flag to skip it — an unverified shared library is one you are about to load in
 process. A mismatch installs nothing.
 
 ```sh
-rift-fetch -version v0.1.0 -platform linux-x86_64-musl   # Alpine: Go cannot detect musl
+rift-fetch -version v0.18.0 -platform linux-x86_64-musl   # Alpine: Go cannot detect musl
 RIFT_RELEASE_BASE=https://mirror.internal/rift \
-  rift-fetch -version v0.1.0                             # air-gapped mirror
+  rift-fetch -version v0.18.0                             # air-gapped mirror
 ```
 
 ## The DSL
@@ -169,7 +169,9 @@ Milestone M5 is feature-complete: wire model and DSL, all three transports, the 
 surface, `rifttest`, intercept, `rift-fetch`, and corpus conformance on the embedded and remote
 lanes.
 
-Not yet: a published release tag. Until one exists, depend on this by commit rather than version.
+Releases are tagged `vX.Y.Z` on master; see [Releases](https://github.com/achird-labs/rift-go/releases).
+Each release names the Rift engine version it was tested against, and that engine release is the
+one to fetch with `rift-fetch -version`.
 
 ## Licence
 
