@@ -32,12 +32,14 @@ type ImpostersConfig struct {
 type Imposter struct {
 	// Port is the explicit listening port. Respected verbatim; omit (0) for an
 	// engine-assigned port.
-	Port               uint16      `json:"port,omitempty"`
-	Protocol           string      `json:"protocol,omitempty"`
-	Host               string      `json:"host,omitempty"`
-	Name               string      `json:"name,omitempty"`
-	Stubs              []Stub      `json:"stubs,omitempty"`
-	RecordRequests     bool        `json:"recordRequests,omitempty"`
+	Port           uint16 `json:"port,omitempty"`
+	Protocol       string `json:"protocol,omitempty"`
+	Host           string `json:"host,omitempty"`
+	Name           string `json:"name,omitempty"`
+	Stubs          []Stub `json:"stubs,omitempty"`
+	RecordRequests bool   `json:"recordRequests,omitempty"`
+	// RecordMatches has no effect on a Rift engine; it is kept so Mountebank configs round-trip.
+	// Engines from 0.18.0 on report it as a config_key_ignored warning.
 	RecordMatches      bool        `json:"recordMatches,omitempty"`
 	DefaultResponse    *IsResponse `json:"defaultResponse,omitempty"`
 	DefaultForward     string      `json:"defaultForward,omitempty"`
@@ -190,7 +192,10 @@ type Behaviors struct {
 // RiftImposter is the `_rift` extension namespace on an imposter. Shapes are deliberately open:
 // the SDK preserves them verbatim rather than modelling every sub-feature.
 type RiftImposter struct {
-	FlowState    JSON            `json:"flowState,omitempty"`
+	FlowState JSON `json:"flowState,omitempty"`
+	// Metrics and Proxy have no effect: metrics are process-wide, on the metrics port, and a proxy
+	// response's upstream is its own proxy.to. They are kept so configs round-trip, and engines
+	// from 0.18.0 on report each as a config_key_ignored warning.
 	Metrics      JSON            `json:"metrics,omitempty"`
 	Proxy        JSON            `json:"proxy,omitempty"`
 	ScriptEngine JSON            `json:"scriptEngine,omitempty"`

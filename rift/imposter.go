@@ -56,7 +56,12 @@ func (b *ImposterBuilder) Record() *ImposterBuilder {
 	return b
 }
 
-// RecordMatches additionally records which stub matched each request.
+// RecordMatches sets the Mountebank recordMatches key.
+//
+// Deprecated: the key has never had an effect on a Rift engine, which does not record per-stub
+// matches, and engines from 0.18.0 on report it as a config_key_ignored warning. Use Record and
+// the request journal to see what arrived. It still serialises, so a config built for Mountebank
+// round-trips unchanged.
 func (b *ImposterBuilder) RecordMatches() *ImposterBuilder {
 	b.imp.RecordMatches = true
 	return b
