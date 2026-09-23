@@ -142,10 +142,36 @@ which an engine older than 0.17.0 would drop and then serve an open admin plane.
 | `Config` | all | Apply an imposters document at serve time. |
 | `AllowInjection` | all | Admit inject and script imposters arriving through the admin plane or `ConfigFile`. |
 | `RequireAdminAuth` | 0.17.0 | Refuse an off-host admin plane with no `APIKey`; from 0.18.0 it also governs `StartIntercept`. |
+| `UpstreamCAFile`, `UpstreamCAPEM` | 0.18.0 | Trust an extra CA, from a file or inline, for the TLS the engine dials. One or the other. |
+| `UpstreamTLSSkipVerify` | 0.18.0 | Accept any upstream certificate. Development only. |
 
 Imposters this process hands the engine directly (`CreateImposter`, `ApplyConfig` and
 `ServeOptions.Config`) are never gated by `AllowInjection`: the embedding process can already run
 code here.
+
+## Trusting a private upstream CA
+
+A `proxy` stub dials a real upstream over TLS, and so does the intercept listener's origin leg.
+The engine trusts the OS trust store. An upstream issued by a private or corporate CA fails until
+you add that CA:
+
+```go
+eng.ServeAdmin(ctx, riftembed.ServeOptions{Host: "127.0.0.1", UpstreamCAPEM: corporateCA})
+port, _ := eng.CreateImposter(ctx, rift.NewImposter("record").
+	Stub(rift.OnAny().Return(rift.Proxy("https://internal.example").Once())))
+```
+
+The policy is installed by `ServeAdmin`, and an imposter reads it when it is created. Serve
+**before** creating the imposters that should use it. An engine that only needs the trust policy
+can serve on loopback with port 0.
+
+`UpstreamCAFile` and `UpstreamCAPEM` append to the OS trust store, and supplying both is refused.
+`UpstreamTLSSkipVerify` accepts any certificate. It is for development only, and the engine logs a
+warning. All three need engine 0.18.0 or later.
+
+!!! warning "`SSL_CERT_FILE` replaces, it does not append"
+    The engine honours `SSL_CERT_FILE`, but that variable **replaces** the trust store. Pointing it
+    at a lone private CA silently drops every public root. Use `UpstreamCAFile` instead.
 
 ## Unsupported platforms
 
