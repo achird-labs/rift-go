@@ -19,9 +19,10 @@ var (
 	// ErrImposterNotFound means the addressed imposter does not exist on the engine.
 	ErrImposterNotFound = errors.New("rift: imposter not found")
 
-	// ErrVersionMismatch means the loaded native library reports a C-ABI version this SDK
-	// does not support.
-	ErrVersionMismatch = errors.New("rift: engine ABI version mismatch")
+	// ErrVersionMismatch means the loaded engine is the wrong version for what was asked: its
+	// native library reports a C-ABI version this SDK does not support, or it does not accept an
+	// option the caller set, which it would otherwise silently ignore.
+	ErrVersionMismatch = errors.New("rift: engine version mismatch")
 
 	// ErrClosed means the engine or handle has already been stopped.
 	ErrClosed = errors.New("rift: engine closed")

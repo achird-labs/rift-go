@@ -48,14 +48,10 @@ func TestStartReportsBuildInfoAndABI(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildInfo: %v", err)
 	}
-	var parsed map[string]any
-	if err := json.Unmarshal(info, &parsed); err != nil {
-		t.Fatalf("BuildInfo is not JSON: %v (%s)", err, info)
+	if info.Version == "" {
+		t.Errorf("BuildInfo has no version: %+v", info)
 	}
-	if _, ok := parsed["version"]; !ok {
-		t.Errorf("BuildInfo has no version key: %s", info)
-	}
-	t.Logf("build info: %s", info)
+	t.Logf("build info: %+v", info)
 }
 
 // The end-to-end shape: build an imposter with the DSL, create it in-process, drive it over

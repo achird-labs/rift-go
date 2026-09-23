@@ -77,6 +77,9 @@ if errors.Is(err, rift.ErrVersionMismatch) {
 `Options.SkipVersionCheck` exists for deliberately testing against a pre-release library. Using it
 otherwise is undefined behaviour, not a warning.
 
+The same sentinel reports a serve option the loaded engine does not accept; see
+[Serve options](#serve-options).
+
 ## Lifecycle
 
 `Engine` is safe for concurrent use. `Close` is idempotent, and calls after it fail cleanly with
@@ -113,13 +116,35 @@ too: it would switch the auth gate on and then admit every request.
 
 ```go
 info, _ := eng.BuildInfo()
-// {"version":"0.18.0","commit":"…","features":["redis-backend","javascript"],
-//  "serveOptions":["host","port","apiKey",…]}
+info.Version                           // "0.18.0"
+info.Features                          // compiled features: ["redis-backend", "javascript"]
+info.SupportsServeOption("noParse")    // true on 0.18.0, false on 0.17.0
 ```
 
-`serveOptions` is the supported way to feature-detect. The **absence** of a key means an engine
-too old to accept it — a rejection only ever comes from an engine that already knows the field, so
-you cannot detect a new capability by watching for an error.
+`ServeOptions` is the supported way to feature-detect. The **absence** of a key means an engine
+too old to accept it. A rejection only ever comes from an engine that already knows the field, so
+you cannot detect a new capability by watching for an error: an older engine silently ignores it.
+
+`ServeAdmin` applies this check itself. An option the loaded engine does not advertise fails with
+`rift.ErrVersionMismatch` before the engine is called. That matters most for `RequireAdminAuth`,
+which an engine older than 0.17.0 would drop and then serve an open admin plane. Engines older than
+0.17.0 publish no list; on them only the seven original options count as supported.
+
+## Serve options
+
+| Field | Engine | Effect |
+|---|---|---|
+| `Host`, `Port` | all | Admin API bind address. `Host` must be an IP literal. |
+| `APIKey` | all | Clients send it as the raw `Authorization` header. |
+| `MetricsPort` | all | Serve Prometheus metrics on this port, on the same host. |
+| `ConfigFile` | all | Load imposters from a JSON or YAML file; `POST /admin/reload` re-reads it. |
+| `Config` | all | Apply an imposters document at serve time. |
+| `AllowInjection` | all | Admit inject and script imposters arriving through the admin plane or `ConfigFile`. |
+| `RequireAdminAuth` | 0.17.0 | Refuse an off-host admin plane with no `APIKey`; from 0.18.0 it also governs `StartIntercept`. |
+
+Imposters this process hands the engine directly (`CreateImposter`, `ApplyConfig` and
+`ServeOptions.Config`) are never gated by `AllowInjection`: the embedding process can already run
+code here.
 
 ## Unsupported platforms
 
