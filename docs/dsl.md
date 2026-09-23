@@ -110,14 +110,42 @@ rift.OnGet("/flaky").
 
 ```go
 rift.OKJSON(body).
-	After(250 * time.Millisecond).        // fixed delay
-	AfterBetween(50*time.Millisecond, 1*time.Second).
+	After(250 * time.Millisecond).        // fixed delay; AfterBetween(min, max) for a random one
 	Repeat(3).
 	Decorate(`(cfg) => { cfg.response.headers['X-Seen'] = '1' }`).
 	Templated()
 ```
 
 `Copy`, `Lookup` and `ShellTransform` pass their engine config through verbatim.
+
+#### Evaluation order is the engine's, not the call order
+
+The builders write the object form, `_behaviors`, and the engine runs it in a fixed order:
+**wait, lookup, copy, shellTransform, decorate**. That is Mountebank's order, and Rift follows it
+from engine 0.18.0. Earlier engines ran wait, copy, lookup, decorate, shellTransform.
+
+So a chain such as `.Decorate(js).ShellTransform(cmd)` runs `shellTransform` first, whatever order
+you called the methods in. And `lookup` runs before `copy`, so text that `copy` puts into the
+response is never scanned for lookup tokens.
+
+When you need a different order, use the array form, `behaviors`: a list the engine runs element by
+element, in order. The builders do not produce it, but the model carries it through `Extra`, so
+either of these works:
+
+```go
+resp := rift.OKText("…").Build()
+resp.Extra = map[string]rift.JSON{"behaviors": []rift.JSON{
+	map[string]rift.JSON{"decorate": js},
+	map[string]rift.JSON{"shellTransform": cmd},
+}}
+
+// or write the response as JSON
+resp, err := rift.ResponseFromJSON([]byte(`{"is":{…},"behaviors":[{"decorate":"…"},{"shellTransform":"…"}]}`))
+```
+
+`GET /imposters` writes behaviors back in Mountebank's grammar: `repeat` on the response, and a
+one-item list as a bare value. A config read back from the engine can therefore differ textually
+from the one you sent while meaning the same thing.
 
 ### Faults and proxies
 
