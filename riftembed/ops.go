@@ -399,6 +399,18 @@ type ServeOptions struct {
 	// RequireAdminAuth refuses to bind an off-host admin plane that has no APIKey, instead of
 	// warning. Since engine 0.18.0 it also governs a later StartIntercept on this engine.
 	RequireAdminAuth bool `json:"requireAdminAuth,omitempty"`
+
+	// UpstreamCAFile and UpstreamCAPEM add a trust anchor, as a PEM file or inline PEM, for the
+	// TLS the engine dials: proxy stubs, and the intercept listener's origin leg. The anchor is
+	// appended to the OS trust store. Supply one or the other, not both. Engine 0.18.0 or later.
+	//
+	// The policy is installed by ServeAdmin, and an imposter reads it when it is created, so serve
+	// before creating the imposters that should use it.
+	UpstreamCAFile string `json:"upstreamCaFile,omitempty"`
+	UpstreamCAPEM  string `json:"upstreamCaPem,omitempty"`
+	// UpstreamTLSSkipVerify accepts any upstream certificate. Development only: it turns off the
+	// check that makes TLS worth having, and the engine logs a warning. Engine 0.18.0 or later.
+	UpstreamTLSSkipVerify bool `json:"upstreamTlsSkipVerify,omitempty"`
 }
 
 // ServeAdmin starts the admin API over this engine and returns the engine's description of the
@@ -410,6 +422,10 @@ func (e *Engine) ServeAdmin(ctx context.Context, opts ServeOptions) (json.RawMes
 	if opts.APIKey != "" && strings.TrimSpace(opts.APIKey) == "" {
 		return nil, fmt.Errorf("%w: API key is blank; set a real token, or leave it empty to run "+
 			"the admin API unauthenticated", rift.ErrInvalidDefinition)
+	}
+	if opts.UpstreamCAFile != "" && opts.UpstreamCAPEM != "" {
+		return nil, fmt.Errorf("%w: UpstreamCAFile and UpstreamCAPEM are mutually exclusive; supply "+
+			"one", rift.ErrInvalidDefinition)
 	}
 	if opts.NoParse && opts.ConfigFile == "" {
 		return nil, fmt.Errorf("%w: NoParse only changes how ConfigFile is read, and no ConfigFile "+
