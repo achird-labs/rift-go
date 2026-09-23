@@ -59,6 +59,14 @@ type InterceptAuth struct {
 	Password string `json:"password"`
 }
 
+// String keeps the password out of %v and %+v.
+func (a InterceptAuth) String() string {
+	return fmt.Sprintf("InterceptAuth{Username: %q, Password: <redacted>}", a.Username)
+}
+
+// GoString keeps the password out of %#v.
+func (a InterceptAuth) GoString() string { return a.String() }
+
 // validate mirrors the engine's own refusals, so a bad combination is named before a listener
 // half-exists.
 func (o InterceptOptions) validate() error {

@@ -137,6 +137,9 @@ func TestInterceptCAMaterialRoundTrips(t *testing.T) {
 		}
 		t.Cleanup(func() { _ = ic3.Stop(ctx) })
 		assertCA(t, ic3, mat.CertPEM)
+		if _, ok := ic3.CAMaterial(); ok {
+			t.Error("CAMaterial reported material for a CA loaded from files; it is only returned when minted")
+		}
 	})
 }
 
@@ -210,7 +213,33 @@ func TestInterceptProxyAuth(t *testing.T) {
 	resp, err := anon.Get("https://flags.example.com/x") //nolint:noctx // short test request
 	if err == nil {
 		_ = resp.Body.Close()
-		t.Errorf("unauthenticated request through an authenticated proxy got %d, want refusal", resp.StatusCode)
+		t.Fatalf("unauthenticated request through an authenticated proxy got %d, want refusal", resp.StatusCode)
+	}
+	if !strings.Contains(err.Error(), "Proxy Authentication Required") {
+		t.Errorf("err = %v, want the CONNECT refused with 407 Proxy Authentication Required", err)
+	}
+
+	for _, format := range []string{"%v", "%+v", "%#v"} {
+		auth := riftembed.InterceptAuth{Username: "tester", Password: "s3cret"}
+		for _, v := range []any{auth, &auth, riftembed.InterceptOptions{Auth: &auth}} {
+			if s := fmt.Sprintf(format, v); strings.Contains(s, "s3cret") {
+				t.Errorf("%T formatted with %s leaks the password: %s", v, format, s)
+			}
+		}
+	}
+}
+
+// A listener started with no CA source mints one, but only hands it back when asked to.
+func TestCAMaterialIsWithheldUnlessRequested(t *testing.T) {
+	eng := startEngine(t)
+	ctx := t.Context()
+	ic, err := eng.StartIntercept(ctx, riftembed.InterceptOptions{})
+	if err != nil {
+		t.Fatalf("StartIntercept: %v", err)
+	}
+	t.Cleanup(func() { _ = ic.Stop(ctx) })
+	if _, ok := ic.CAMaterial(); ok {
+		t.Error("CAMaterial reported material without ReturnCAKey")
 	}
 }
 
