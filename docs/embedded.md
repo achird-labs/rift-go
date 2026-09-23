@@ -95,6 +95,20 @@ than pretended otherwise; honouring cancellation at the boundary is the honest a
 to offer, and it is enough for the case that matters: a cancelled test not queueing more work
 against an engine it is about to close.
 
+## Serving the admin API
+
+`ServeAdmin` puts the engine's HTTP admin API on a port, for tools that talk to it over HTTP:
+
+```go
+raw, err := eng.ServeAdmin(ctx, riftembed.ServeOptions{APIKey: token})
+// {"adminPort":49321,"adminUrl":"http://127.0.0.1:49321","metricsPort":null}
+```
+
+With `APIKey` set, clients must send it as the raw `Authorization` header value, which is what
+`rift.Connect` with `RemoteOptions.APIKey` does. Leave it empty to run unauthenticated. A
+whitespace-only key is refused before the engine is called, and engines from 0.17.0 on refuse one
+too: it would switch the auth gate on and then admit every request.
+
 ## Build info and capabilities
 
 ```go

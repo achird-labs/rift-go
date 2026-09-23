@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"strings"
 
 	"github.com/achird-labs/rift-go/rift"
 )
@@ -373,17 +374,22 @@ func (e *Engine) FlowStateDelete(ctx context.Context, port uint16, flowID string
 
 // ServeOptions configures the in-process admin/metrics plane.
 type ServeOptions struct {
-	Port   uint16 `json:"port,omitempty"`
-	Host   string `json:"host,omitempty"`
+	Port uint16 `json:"port,omitempty"`
+	Host string `json:"host,omitempty"`
+	// APIKey gates the admin API: clients send it as the raw Authorization header value. Empty
+	// runs the admin API unauthenticated. A whitespace-only key is refused before the engine is
+	// called; engines from 0.17.0 on refuse one too, since it would switch the auth gate on and
+	// then admit every request.
 	APIKey string `json:"apiKey,omitempty"`
 }
 
 // ServeAdmin starts the admin API over this engine and returns the engine's description of the
-// bound listener.
-//
-// Note: a blank or whitespace APIKey is rejected by current engines rather than silently
-// enabling a gate that authenticates everyone. Leave it empty to run without an API key.
+// bound listener: {"adminPort":…,"adminUrl":"http://…","metricsPort":…}.
 func (e *Engine) ServeAdmin(ctx context.Context, opts ServeOptions) (json.RawMessage, error) {
+	if opts.APIKey != "" && strings.TrimSpace(opts.APIKey) == "" {
+		return nil, fmt.Errorf("%w: API key is blank; set a real token, or leave it empty to run "+
+			"the admin API unauthenticated", rift.ErrInvalidDefinition)
+	}
 	body, err := json.Marshal(opts)
 	if err != nil {
 		return nil, err
