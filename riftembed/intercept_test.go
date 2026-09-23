@@ -30,7 +30,7 @@ func TestInterceptForwardsHardcodedHTTPSHostToAnImposter(t *testing.T) {
 		t.Fatalf("StartIntercept: %v", err)
 	}
 	t.Cleanup(func() { _ = ic.Stop(ctx) })
-	t.Logf("intercept proxy on %s", ic.ProxyURL())
+	t.Logf("intercept proxy on %s", ic.ProxyURL().Redacted())
 
 	if err := ic.AddRules(ctx, riftembed.InterceptForward("cdn.example.com", port)); err != nil {
 		t.Fatalf("AddRules: %v", err)
