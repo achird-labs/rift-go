@@ -90,11 +90,48 @@ nothing to verify against.
 ```go
 pem, _ := ic.CACertPEM(ctx)          // raw PEM, for anything that needs it
 cfg, _ := ic.TLSConfig(ctx)          // *tls.Config trusting the CA
-url := ic.ProxyURL()                 // for http.ProxyURL / HTTPS_PROXY
+url := ic.ProxyURL()                 // for http.ProxyURL / HTTPS_PROXY; log url.Redacted()
 ```
 
 `TLSConfig` seeds its pool from the **system roots** and adds the intercept CA, so a client using
 it still reaches ordinary hosts — the interception is added, nothing is taken away.
+
+## Sharing a CA
+
+By default every listener mints a fresh CA. To have several engines, or several runs, present one
+CA that a system under test trusts once, mint it once and hand it back in:
+
+```go
+first, _ := eng.StartIntercept(ctx, riftembed.InterceptOptions{ReturnCAKey: true})
+ca, _ := first.CAMaterial()   // certificate and private key, returned once
+
+// Elsewhere: the same anchor, inline …
+other.StartIntercept(ctx, riftembed.InterceptOptions{CACertPEM: ca.CertPEM, CAKeyPEM: ca.KeyPEM})
+// … or from files.
+other.StartIntercept(ctx, riftembed.InterceptOptions{CACertPath: "ca.pem", CAKeyPath: "ca.key"})
+```
+
+Each pair is both-or-neither, the two pairs are mutually exclusive, and `ReturnCAKey` cannot be
+combined with either. The SDK refuses those combinations with `rift.ErrInvalidDefinition` before the
+engine is called. `ca.KeyPEM` is the CA's private key: store it where the CA is meant to be shared,
+and never log it.
+
+## Rules at start, and proxy auth
+
+```go
+ic, _ := eng.StartIntercept(ctx, riftembed.InterceptOptions{
+	Rules: []rift.InterceptRule{riftembed.InterceptForward("cdn.example.com", port)},
+	Auth:  &riftembed.InterceptAuth{Username: "ci", Password: secret},
+})
+```
+
+`Rules` are installed before the listener accepts a connection, so no request can arrive between
+start and a follow-up `AddRules`. They need engine 0.18.0 or later.
+
+`Auth` makes the listener demand `Proxy-Authorization` on `CONNECT`. `ProxyURL` and `HTTPClient`
+carry the credentials, so a client built from them keeps working. Neither field may be blank.
+Because the URL embeds the password, log `ic.ProxyURL().Redacted()`, never the URL itself;
+printing the `Intercept` with `%v` is safe, and so is printing `CAMaterial`, which redacts the key.
 
 ## A complete example
 
