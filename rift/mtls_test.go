@@ -11,7 +11,13 @@ import (
 // wireEqual asserts an imposter serialises to exactly the given JSON document.
 func wireEqual(t *testing.T, imp rift.Imposter, want string) {
 	t.Helper()
-	got, err := rift.ToJSON(imp)
+	wireEqualDoc(t, imp, want)
+}
+
+// wireEqualDoc asserts a value serialises to exactly the given JSON document.
+func wireEqualDoc(t *testing.T, v any, want string) {
+	t.Helper()
+	got, err := rift.ToJSON(v)
 	if err != nil {
 		t.Fatalf("ToJSON: %v", err)
 	}
