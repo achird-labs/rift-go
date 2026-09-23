@@ -68,9 +68,38 @@ func (b *ImposterBuilder) AllowCORS() *ImposterBuilder {
 	return b
 }
 
-// MutualAuth requires a client certificate (HTTPS imposters).
+// MutualAuth requires a client certificate at the TLS handshake, without validating it.
+//
+// Deprecated: use RequireClientCert, which also sets the protocol and can pin trust anchors.
+// Since engine 0.18.0 this key is enforced: a client that presents no certificate fails the
+// handshake, and a non-HTTPS imposter carrying it is refused.
 func (b *ImposterBuilder) MutualAuth() *ImposterBuilder {
 	b.imp.MutualAuth = true
+	return b
+}
+
+// RequireClientCert makes an HTTPS imposter demand a client certificate at the TLS handshake. With
+// one or more CA PEMs the certificate must also chain to one of them; with none, any certificate
+// the client holds is accepted. The protocol becomes "https" unless one was already set.
+//
+// Engine 0.18.0 or later. Older engines ignore all three keys and accept every client.
+func (b *ImposterBuilder) RequireClientCert(caPEMs ...string) *ImposterBuilder {
+	if b.imp.Protocol == "" {
+		b.imp.Protocol = "https"
+	}
+	b.imp.MutualAuth = true
+	switch len(caPEMs) {
+	case 0:
+		b.imp.RejectUnauthorized, b.imp.CA = false, nil
+	case 1:
+		b.imp.RejectUnauthorized, b.imp.CA = true, caPEMs[0]
+	default:
+		anchors := make([]JSON, len(caPEMs))
+		for i, p := range caPEMs {
+			anchors[i] = p
+		}
+		b.imp.RejectUnauthorized, b.imp.CA = true, anchors
+	}
 	return b
 }
 

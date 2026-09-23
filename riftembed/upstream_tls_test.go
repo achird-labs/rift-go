@@ -1,83 +1,31 @@
 package riftembed_test
 
 import (
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
 	"crypto/tls"
-	"crypto/x509"
-	"crypto/x509/pkix"
-	"encoding/pem"
 	"errors"
 	"fmt"
-	"math/big"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/achird-labs/rift-go/rift"
 	"github.com/achird-labs/rift-go/riftembed"
 )
 
 // privateOrigin is an HTTPS upstream whose leaf is issued by a CA no system trust store holds,
-// standing in for a service behind a corporate CA. httptest's own certificate will not do: it is
-// a self-signed CA serving as its own leaf, which a strict verifier refuses whatever it trusts.
+// standing in for a service behind a corporate CA.
 func privateOrigin(t *testing.T) (url, caPEM string) {
 	t.Helper()
-	caKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		t.Fatal(err)
-	}
-	caTmpl := &x509.Certificate{
-		SerialNumber:          big.NewInt(1),
-		Subject:               pkix.Name{CommonName: "rift-go test CA"},
-		NotBefore:             time.Now().Add(-time.Hour),
-		NotAfter:              time.Now().Add(time.Hour),
-		IsCA:                  true,
-		BasicConstraintsValid: true,
-		KeyUsage:              x509.KeyUsageCertSign,
-	}
-	caDER, err := x509.CreateCertificate(rand.Reader, caTmpl, caTmpl, &caKey.PublicKey, caKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ca, err := x509.ParseCertificate(caDER)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	leafKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		t.Fatal(err)
-	}
-	leafTmpl := &x509.Certificate{
-		SerialNumber: big.NewInt(2),
-		Subject:      pkix.Name{CommonName: "127.0.0.1"},
-		IPAddresses:  []net.IP{net.ParseIP("127.0.0.1")},
-		NotBefore:    time.Now().Add(-time.Hour),
-		NotAfter:     time.Now().Add(time.Hour),
-		KeyUsage:     x509.KeyUsageDigitalSignature,
-		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-	}
-	leafDER, err := x509.CreateCertificate(rand.Reader, leafTmpl, ca, &leafKey.PublicKey, caKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	ca := newTestCA(t)
 	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("from-origin"))
 	}))
-	srv.TLS = &tls.Config{
-		Certificates: []tls.Certificate{{Certificate: [][]byte{leafDER}, PrivateKey: leafKey}},
-		MinVersion:   tls.VersionTLS12,
-	}
+	srv.TLS = &tls.Config{Certificates: []tls.Certificate{ca.serverLeaf(t).TLS}, MinVersion: tls.VersionTLS12}
 	srv.StartTLS()
 	t.Cleanup(srv.Close)
-	return srv.URL, string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caDER}))
+	return srv.URL, ca.PEM
 }
 
 // proxyThrough serves the admin plane with opts, then creates a proxy imposter to origin and

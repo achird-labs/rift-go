@@ -132,6 +132,31 @@ rift.Proxy("http://upstream:8080").
 
 Fault names are passed through as strings, so a newer engine's fault works without an SDK release.
 
+## HTTPS and client certificates
+
+`HTTPS(certPEM, keyPEM)` serves TLS with your certificate; empty strings select the engine's
+self-signed default. `RequireClientCert` makes the imposter demand a client certificate at the
+handshake:
+
+```go
+rift.NewImposter("bank").
+	HTTPS(serverCert, serverKey).
+	RequireClientCert(clientCA).        // the certificate must chain to clientCA
+	Stub(rift.OnAny().Return(rift.OK()))
+
+rift.NewImposter("any-client").RequireClientCert()   // any certificate will do
+```
+
+With one or more CA PEMs the client certificate must chain to one of them. With none, any
+certificate the client holds is accepted, but a client that presents nothing still fails the
+handshake. `RequireClientCert` sets the protocol to `https` unless you set one.
+
+!!! warning "Engine 0.18.0 enforces this, earlier engines ignored it"
+    Before 0.18.0 the engine dropped `mutualAuth`, `rejectUnauthorized` and `ca`, and accepted every
+    client. From 0.18.0 they are enforced. A test that used `MutualAuth()` and connected without a
+    client certificate passed before and fails now, and `MutualAuth()` on a non-HTTPS imposter is
+    refused. `MutualAuth()` is deprecated in favour of `RequireClientCert`.
+
 ## Scenarios
 
 A stub can gate on and advance a named state machine:
