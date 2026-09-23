@@ -138,6 +138,7 @@ which an engine older than 0.17.0 would drop and then serve an open admin plane.
 | `APIKey` | all | Clients send it as the raw `Authorization` header. |
 | `MetricsPort` | all | Serve Prometheus metrics on this port, on the same host. |
 | `ConfigFile` | all | Load imposters from a JSON or YAML file; `POST /admin/reload` re-reads it. |
+| `NoParse` | 0.18.0 | Load `ConfigFile` verbatim, skipping EJS preprocessing. The only way to keep a literal `<%`. Requires `ConfigFile`. |
 | `Config` | all | Apply an imposters document at serve time. |
 | `AllowInjection` | all | Admit inject and script imposters arriving through the admin plane or `ConfigFile`. |
 | `RequireAdminAuth` | 0.17.0 | Refuse an off-host admin plane with no `APIKey`; from 0.18.0 it also governs `StartIntercept`. |

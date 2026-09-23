@@ -386,6 +386,10 @@ type ServeOptions struct {
 	// ConfigFile loads imposters from a JSON or YAML file at serve time; POST /admin/reload
 	// re-reads it. The file is EJS-preprocessed.
 	ConfigFile string `json:"configFile,omitempty"`
+	// NoParse loads ConfigFile verbatim, skipping EJS preprocessing: the only way a config file can
+	// hold a literal "<%". The re-read on POST /admin/reload keeps it. Requires ConfigFile; engine
+	// 0.18.0 or later.
+	NoParse bool `json:"noParse,omitempty"`
 	// Config applies an imposters document at serve time, as ApplyConfig does.
 	Config *rift.ImpostersConfig `json:"config,omitempty"`
 	// AllowInjection lets inject and script imposters in through the admin plane and ConfigFile.
@@ -406,6 +410,10 @@ func (e *Engine) ServeAdmin(ctx context.Context, opts ServeOptions) (json.RawMes
 	if opts.APIKey != "" && strings.TrimSpace(opts.APIKey) == "" {
 		return nil, fmt.Errorf("%w: API key is blank; set a real token, or leave it empty to run "+
 			"the admin API unauthenticated", rift.ErrInvalidDefinition)
+	}
+	if opts.NoParse && opts.ConfigFile == "" {
+		return nil, fmt.Errorf("%w: NoParse only changes how ConfigFile is read, and no ConfigFile "+
+			"was given", rift.ErrInvalidDefinition)
 	}
 	body, err := rift.ToJSON(opts)
 	if err != nil {
