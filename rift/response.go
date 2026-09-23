@@ -115,50 +115,37 @@ func (b *ResponseBuilder) Binary() *ResponseBuilder {
 // After delays the response by d. The engine takes milliseconds; sub-millisecond precision
 // is not representable on the wire and is rounded down.
 func (b *ResponseBuilder) After(d time.Duration) *ResponseBuilder {
-	b.ensureBehaviors()
-	b.resp.Behaviors.Wait = int(d.Milliseconds())
-	return b
+	return behave(b, &b.resp.Behaviors, waitFor(d))
 }
 
-// AfterBetween delays the response by a random duration in [min, max].
+// AfterBetween delays the response by a random duration in [minD, maxD]. minD must not exceed
+// maxD: engines from 0.18.0 refuse the imposter otherwise, and earlier ones failed on every
+// request.
 func (b *ResponseBuilder) AfterBetween(minD, maxD time.Duration) *ResponseBuilder {
-	b.ensureBehaviors()
-	b.resp.Behaviors.Wait = map[string]JSON{
-		"min": int(minD.Milliseconds()),
-		"max": int(maxD.Milliseconds()),
-	}
-	return b
+	return behave(b, &b.resp.Behaviors, waitBetween(minD, maxD))
 }
 
 // Repeat serves this response n times before the cycle advances.
 func (b *ResponseBuilder) Repeat(n int) *ResponseBuilder {
-	b.ensureBehaviors()
-	b.resp.Behaviors.Repeat = n
-	return b
+	return behave(b, &b.resp.Behaviors, repeatN(n))
 }
 
 // Decorate post-processes the response with a JavaScript function. Requires the engine to be
 // started with injection enabled.
 func (b *ResponseBuilder) Decorate(js string) *ResponseBuilder {
-	b.ensureBehaviors()
-	b.resp.Behaviors.Decorate = js
-	return b
+	return behave(b, &b.resp.Behaviors, decorateWith(js))
 }
 
 // Copy copies values out of the request into the response. The shape is the engine's `copy`
 // behavior config, passed through verbatim.
 func (b *ResponseBuilder) Copy(spec JSON) *ResponseBuilder {
-	b.ensureBehaviors()
-	b.resp.Behaviors.Copy = spec
-	return b
+	return behave(b, &b.resp.Behaviors, copySpec(spec))
 }
 
 // Lookup substitutes values from an external data source. The shape is the engine's `lookup`
 // behavior config, passed through verbatim.
 func (b *ResponseBuilder) Lookup(spec JSON) *ResponseBuilder {
-	b.ensureBehaviors()
-	b.resp.Behaviors.Lookup = spec
-	return b
+	return behave(b, &b.resp.Behaviors, lookupSpec(spec))
 }
 
 // ShellTransform pipes the response through an external command. Requires a host shell.
@@ -166,17 +153,7 @@ func (b *ResponseBuilder) Lookup(spec JSON) *ResponseBuilder {
 // The engine runs shellTransform before decorate, and lookup before copy, whatever order the
 // builder methods were called in; see Behaviors.
 func (b *ResponseBuilder) ShellTransform(cmd ...string) *ResponseBuilder {
-	b.ensureBehaviors()
-	if len(cmd) == 1 {
-		b.resp.Behaviors.ShellTransform = cmd[0]
-		return b
-	}
-	vs := make([]JSON, len(cmd))
-	for i, c := range cmd {
-		vs[i] = c
-	}
-	b.resp.Behaviors.ShellTransform = vs
-	return b
+	return behave(b, &b.resp.Behaviors, shellTransformCmd(cmd))
 }
 
 // Templated marks the response body as containing engine template expressions.
@@ -194,18 +171,15 @@ func (b *ResponseBuilder) ensureIs() {
 	}
 }
 
-func (b *ResponseBuilder) ensureBehaviors() {
-	if b.resp.Behaviors == nil {
-		b.resp.Behaviors = &Behaviors{}
-	}
-}
-
 // --- non-`is` responses ---
 
 // Fault returns a connection-level fault instead of a response. Known values include
 // "CONNECTION_RESET_BY_PEER", "EMPTY_RESPONSE", "MALFORMED_RESPONSE_CHUNK" and
 // "RANDOM_DATA_THEN_CLOSE"; the SDK passes the string through so a newer engine's fault works
 // without an SDK release.
+//
+// Of the behaviors, only Repeat applies to a fault. The engine keeps any other behavior on a fault
+// response but runs none of it, and from 0.18.0 reports it as a config_key_ignored warning.
 func Fault(kind string) *ResponseBuilder {
 	return &ResponseBuilder{resp: StubResponse{Fault: kind}}
 }
@@ -222,12 +196,57 @@ func Proxy(to string) *ProxyBuilder {
 
 // ProxyBuilder builds a proxy response.
 type ProxyBuilder struct {
-	proxy ProxyResponse
+	proxy     ProxyResponse
+	behaviors *Behaviors
 }
 
 func (b *ProxyBuilder) BuildResponse() StubResponse {
 	p := b.proxy
-	return StubResponse{Proxy: &p}
+	return StubResponse{Proxy: &p, Behaviors: b.behaviors}
+}
+
+// The behaviors below run on the upstream's response before it reaches the client and before it
+// is recorded, as Mountebank does. Engine 0.18.0 or later; older engines ignore behaviors on a
+// proxy response.
+
+// After delays the proxied response by d, rounded down to milliseconds.
+func (b *ProxyBuilder) After(d time.Duration) *ProxyBuilder {
+	return behave(b, &b.behaviors, waitFor(d))
+}
+
+// AfterBetween delays the proxied response by a random duration in [minD, maxD]. minD must not
+// exceed maxD.
+func (b *ProxyBuilder) AfterBetween(minD, maxD time.Duration) *ProxyBuilder {
+	return behave(b, &b.behaviors, waitBetween(minD, maxD))
+}
+
+// Repeat serves this response n times before the cycle advances.
+func (b *ProxyBuilder) Repeat(n int) *ProxyBuilder {
+	return behave(b, &b.behaviors, repeatN(n))
+}
+
+// Decorate post-processes the proxied response with a JavaScript function. Requires the engine to
+// be started with injection enabled.
+func (b *ProxyBuilder) Decorate(js string) *ProxyBuilder {
+	return behave(b, &b.behaviors, decorateWith(js))
+}
+
+// Copy copies values out of the request into the proxied response, passed through verbatim.
+func (b *ProxyBuilder) Copy(spec JSON) *ProxyBuilder {
+	return behave(b, &b.behaviors, copySpec(spec))
+}
+
+// Lookup substitutes values from an external data source, passed through verbatim.
+func (b *ProxyBuilder) Lookup(spec JSON) *ProxyBuilder {
+	return behave(b, &b.behaviors, lookupSpec(spec))
+}
+
+// ShellTransform pipes the proxied response through an external command. Requires a host shell.
+//
+// The engine runs shellTransform before decorate, and lookup before copy, whatever order the
+// builder methods were called in; see Behaviors.
+func (b *ProxyBuilder) ShellTransform(cmd ...string) *ProxyBuilder {
+	return behave(b, &b.behaviors, shellTransformCmd(cmd))
 }
 
 // Build returns the wire response.
