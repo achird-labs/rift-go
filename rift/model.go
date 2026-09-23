@@ -32,17 +32,21 @@ type ImpostersConfig struct {
 type Imposter struct {
 	// Port is the explicit listening port. Respected verbatim; omit (0) for an
 	// engine-assigned port.
-	Port            uint16          `json:"port,omitempty"`
-	Protocol        string          `json:"protocol,omitempty"`
-	Host            string          `json:"host,omitempty"`
-	Name            string          `json:"name,omitempty"`
-	Stubs           []Stub          `json:"stubs,omitempty"`
-	RecordRequests  bool            `json:"recordRequests,omitempty"`
-	RecordMatches   bool            `json:"recordMatches,omitempty"`
-	DefaultResponse *IsResponse     `json:"defaultResponse,omitempty"`
-	DefaultForward  string          `json:"defaultForward,omitempty"`
-	AllowCORS       bool            `json:"allowCORS,omitempty"`
-	MutualAuth      bool            `json:"mutualAuth,omitempty"`
+	Port               uint16      `json:"port,omitempty"`
+	Protocol           string      `json:"protocol,omitempty"`
+	Host               string      `json:"host,omitempty"`
+	Name               string      `json:"name,omitempty"`
+	Stubs              []Stub      `json:"stubs,omitempty"`
+	RecordRequests     bool        `json:"recordRequests,omitempty"`
+	RecordMatches      bool        `json:"recordMatches,omitempty"`
+	DefaultResponse    *IsResponse `json:"defaultResponse,omitempty"`
+	DefaultForward     string      `json:"defaultForward,omitempty"`
+	AllowCORS          bool        `json:"allowCORS,omitempty"`
+	MutualAuth         bool        `json:"mutualAuth,omitempty"`
+	RejectUnauthorized bool        `json:"rejectUnauthorized,omitempty"`
+	// CA holds the PEM trust anchors a client certificate must chain to: one string, or a list.
+	// It round-trips in whichever form it arrived.
+	CA              JSON            `json:"ca,omitempty"`
 	StrictBehaviors bool            `json:"strictBehaviors,omitempty"`
 	Cert            string          `json:"cert,omitempty"`
 	Key             string          `json:"key,omitempty"`

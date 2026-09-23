@@ -340,7 +340,7 @@ func isDefault(key string, val any) bool {
 	switch key {
 	case "protocol":
 		return val == "http"
-	case "recordRequests", "recordMatches", "allowCORS", "mutualAuth", "strictBehaviors":
+	case "recordRequests", "recordMatches", "allowCORS", "mutualAuth", "rejectUnauthorized", "strictBehaviors":
 		return val == false
 	default:
 		return false
