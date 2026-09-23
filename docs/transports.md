@@ -37,6 +37,11 @@ if err := eng.Ping(ctx); err != nil {
 `Connect` does not contact the engine; it just builds a client. Call `Ping` when you want to know
 whether anything is there.
 
+The API key is sent as the raw value of the `Authorization` header, with no scheme, because that is
+what an engine started with `--api-key` compares against. `Spawn` passes `SpawnOptions.APIKey` to the
+child as `--api-key`. A whitespace-only key is refused before anything is contacted or started:
+engines from 0.17.0 on reject one, since it would switch the auth gate on and then admit everyone.
+
 ### Reaching imposters on another host
 
 `RemoteOptions.Host` overrides where imposters are addressed, which matters when the admin API and
