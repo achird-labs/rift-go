@@ -177,7 +177,9 @@ type StubResponse struct {
 	Extra map[string]JSON `json:"-"`
 }
 
-// Behaviors post-process a response.
+// Behaviors post-process a response. The engine runs this object form in a fixed order, whatever
+// order the fields were set in: wait, lookup, copy, shellTransform, decorate (Mountebank's order,
+// from engine 0.18.0). For another order, send the array form under the response's "behaviors" key.
 type Behaviors struct {
 	// Wait is a number of milliseconds, a template string, or {"min":n,"max":n}.
 	Wait           JSON            `json:"wait,omitempty"`

@@ -162,6 +162,9 @@ func (b *ResponseBuilder) Lookup(spec JSON) *ResponseBuilder {
 }
 
 // ShellTransform pipes the response through an external command. Requires a host shell.
+//
+// The engine runs shellTransform before decorate, and lookup before copy, whatever order the
+// builder methods were called in; see Behaviors.
 func (b *ResponseBuilder) ShellTransform(cmd ...string) *ResponseBuilder {
 	b.ensureBehaviors()
 	if len(cmd) == 1 {
