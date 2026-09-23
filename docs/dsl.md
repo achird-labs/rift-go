@@ -179,6 +179,21 @@ eng.SpaceAddStub(ctx, port, "flow-a", rift.OnGet("/who").Return(rift.OKText("a")
 eng.SpaceAddStub(ctx, port, "flow-b", rift.OnGet("/who").Return(rift.OKText("b")))
 ```
 
+## Keys the engine accepts but ignores
+
+Three keys the model carries have no effect on a Rift engine. They are kept so a Mountebank config
+round-trips unchanged:
+
+| Key | Why it does nothing | Use instead |
+|---|---|---|
+| `recordMatches` (`RecordMatches()`) | Rift does not record per-stub matches | `Record()` and the request journal |
+| `_rift.metrics` | metrics are process-wide | the metrics port (`ServeOptions.MetricsPort`, or `--metrics-port`) |
+| `_rift.proxy` | a proxy response's upstream is its own `proxy.to` | the `Proxy(...)` response |
+
+Engines from 0.18.0 on report each one as a `config_key_ignored` warning. On the embedded engine it
+appears in `StubWarnings`, and on a remote one in `_rift.warnings` on `GET /imposters/:port`.
+`RecordMatches()` is deprecated.
+
 ## The escape hatch
 
 For a config that predates the DSL, is generated elsewhere, or exercises a corner of the grammar
