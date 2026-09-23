@@ -15,7 +15,7 @@ if errors.Is(err, rift.ErrImposterNotFound) {
 | `ErrEngineUnavailable` | the engine could not be reached, started, or loaded — a refused admin connection, a spawn failure, a missing native library |
 | `ErrInvalidDefinition` | a definition was rejected before it reached the engine, or could not be encoded/decoded |
 | `ErrImposterNotFound` | the addressed imposter does not exist |
-| `ErrVersionMismatch` | the loaded library reports a C-ABI version this SDK does not support |
+| `ErrVersionMismatch` | the loaded library reports a C-ABI version this SDK does not support, or the engine does not accept an option you set (see [serve options](embedded.md#serve-options)) |
 | `ErrClosed` | the engine or handle has already been stopped |
 | `ErrVerificationFailed` | a verification's match count did not meet expectations |
 

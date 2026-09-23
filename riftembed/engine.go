@@ -81,23 +81,23 @@ func Start(opts Options) (*Engine, error) {
 	return &Engine{sym: sym, lib: lib, handle: h}, nil
 }
 
-// BuildInfo returns the native library's build metadata as raw JSON. It reports the engine
-// version and the capability lists SDKs feature-detect against — notably serveOptions, whose
-// *absence* of a key means an engine too old to accept it.
-func (e *Engine) BuildInfo() (json.RawMessage, error) {
+// BuildInfo returns the native library's build metadata: its version and the capability lists
+// SDKs feature-detect against. BuildInfo.SupportsServeOption is the check to use before relying
+// on a serve option.
+func (e *Engine) BuildInfo() (BuildInfo, error) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	if e.closed {
-		return nil, rift.ErrClosed
+		return BuildInfo{}, rift.ErrClosed
 	}
 	// rift_build_info returns a static string — read it, never free it.
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 	s := goString(e.sym.buildInfo())
 	if s == "" {
-		return nil, fmt.Errorf("%w: rift_build_info returned nothing", rift.ErrEngineUnavailable)
+		return BuildInfo{}, fmt.Errorf("%w: rift_build_info returned nothing", rift.ErrEngineUnavailable)
 	}
-	return json.RawMessage(s), nil
+	return parseBuildInfo(s)
 }
 
 // ABIVersion reports the C-ABI version of the loaded library.

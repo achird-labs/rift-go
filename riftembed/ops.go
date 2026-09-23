@@ -381,17 +381,41 @@ type ServeOptions struct {
 	// called; engines from 0.17.0 on refuse one too, since it would switch the auth gate on and
 	// then admit every request.
 	APIKey string `json:"apiKey,omitempty"`
+	// MetricsPort serves Prometheus metrics on this port, on the same host. Zero serves none.
+	MetricsPort uint16 `json:"metricsPort,omitempty"`
+	// ConfigFile loads imposters from a JSON or YAML file at serve time; POST /admin/reload
+	// re-reads it. The file is EJS-preprocessed.
+	ConfigFile string `json:"configFile,omitempty"`
+	// Config applies an imposters document at serve time, as ApplyConfig does.
+	Config *rift.ImpostersConfig `json:"config,omitempty"`
+	// AllowInjection lets inject and script imposters in through the admin plane and ConfigFile.
+	// Imposters this process hands over directly (CreateImposter, ApplyConfig, Config) are never
+	// gated: it can already run code here.
+	AllowInjection bool `json:"allowInjection,omitempty"`
+	// RequireAdminAuth refuses to bind an off-host admin plane that has no APIKey, instead of
+	// warning. Since engine 0.18.0 it also governs a later StartIntercept on this engine.
+	RequireAdminAuth bool `json:"requireAdminAuth,omitempty"`
 }
 
 // ServeAdmin starts the admin API over this engine and returns the engine's description of the
 // bound listener: {"adminPort":…,"adminUrl":"http://…","metricsPort":…}.
+//
+// An option the loaded engine does not advertise fails with rift.ErrVersionMismatch before the
+// engine is called, because that engine would ignore the option rather than refuse it.
 func (e *Engine) ServeAdmin(ctx context.Context, opts ServeOptions) (json.RawMessage, error) {
 	if opts.APIKey != "" && strings.TrimSpace(opts.APIKey) == "" {
 		return nil, fmt.Errorf("%w: API key is blank; set a real token, or leave it empty to run "+
 			"the admin API unauthenticated", rift.ErrInvalidDefinition)
 	}
-	body, err := json.Marshal(opts)
+	body, err := rift.ToJSON(opts)
 	if err != nil {
+		return nil, err
+	}
+	info, err := e.BuildInfo()
+	if err != nil {
+		return nil, err
+	}
+	if err := checkServeOptions(info, body); err != nil {
 		return nil, err
 	}
 	var out json.RawMessage
