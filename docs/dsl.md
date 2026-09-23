@@ -160,6 +160,23 @@ rift.Proxy("http://upstream:8080").
 
 Fault names are passed through as strings, so a newer engine's fault works without an SDK release.
 
+A proxy response takes the same behaviors as a canned one. They run on the upstream's response
+before it reaches the client and before it is recorded, as Mountebank does:
+
+```go
+rift.Proxy("http://upstream:8080").Once().
+	After(500 * time.Millisecond)         // delays the live first call; the recorded replay has no delay
+```
+
+That needs engine 0.18.0 or later; older engines ignore behaviors on a proxy response. The stub a
+recording generates holds the transformed response, not the behaviors, so nothing runs twice.
+
+A fault takes only `Repeat`. Any other behavior on a fault is kept but never runs, and engines
+from 0.18.0 on report it as a `config_key_ignored` warning.
+
+`AfterBetween(min, max)` needs `min` no greater than `max`. Engines from 0.18.0 refuse the imposter
+otherwise; earlier ones accepted it and then failed every request.
+
 ## HTTPS and client certificates
 
 `HTTPS(certPEM, keyPEM)` serves TLS with your certificate; empty strings select the engine's
