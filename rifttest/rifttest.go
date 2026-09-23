@@ -306,6 +306,9 @@ func renderFailure(predicates []rift.Predicate, res rift.VerifyResult, journal [
 func summarise(r rift.RecordedRequest) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s %s", r.Method, r.Path)
+	if r.Status != 0 {
+		fmt.Fprintf(&b, " → %d", r.Status)
+	}
 	if len(r.Query) > 0 {
 		fmt.Fprintf(&b, " query=%v", r.Query)
 	}

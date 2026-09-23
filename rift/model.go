@@ -222,8 +222,13 @@ type RecordedRequest struct {
 	Headers     Headers `json:"headers,omitempty"`
 	Body        JSON    `json:"body,omitempty"`
 	// Mode is "binary" when the engine base64-encoded a non-UTF-8 body; absent for text.
-	Mode      string          `json:"_mode,omitempty"`
-	Timestamp string          `json:"timestamp,omitempty"`
+	Mode      string `json:"_mode,omitempty"`
+	Timestamp string `json:"timestamp,omitempty"`
+	// Status is the HTTP status the request was answered with, and LatencyMs how long answering
+	// took. Engines from 0.18.0 on record both. LatencyMs is a pointer because 0 is a real
+	// reading, since a canned response answers in under a millisecond, and must not read as absent.
+	Status    int             `json:"status,omitempty"`
+	LatencyMs *uint64         `json:"latencyMs,omitempty"`
 	Extra     map[string]JSON `json:"-"`
 }
 

@@ -64,19 +64,24 @@ rifttest: imposter "users" (port 4545): expected exactly 1 matching request(s), 
     {"equals":{"method":"GET","path":"/api/users/2"}}
 
   closest recorded request:
-    GET /api/users/1 headers=map[Accept:application/json]
+    GET /api/users/1 → 200 headers=map[Accept:application/json]
 
   it failed these clauses:
     wanted {"equals":{"method":"GET","path":"/api/users/2"}}
       actual: map[path:/api/users/1]
 
   journal:
-    GET /api/users/1 headers=map[Accept:application/json]
-    GET /health
+    GET /api/users/1 → 200 headers=map[Accept:application/json]
+    GET /health → 200
 ```
 
 An empty journal says so explicitly, and points at the usual cause — the system under test not
 being pointed at `Handle.BaseURL()`.
+
+The `→ 200` after each request is the status the imposter answered with. Engines from 0.18.0 on
+record it, and older ones leave it out. Each `rift.RecordedRequest` also carries it as `Status`,
+with `LatencyMs` giving how long answering took; `LatencyMs` is nil on an older engine, and `0` is
+a real reading.
 
 ## The handle
 
