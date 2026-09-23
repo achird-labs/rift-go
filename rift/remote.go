@@ -19,7 +19,10 @@ type RemoteOptions struct {
 	// a 30s timeout; supply your own to change timeouts, proxies, or TLS.
 	HTTPClient *http.Client
 
-	// APIKey is sent as x-api-key when the engine was started with an API key.
+	// APIKey authenticates admin calls to an engine started with --api-key. It is sent as the raw
+	// value of the Authorization header, with no scheme, which is what the engine compares against.
+	// Empty means no key. A whitespace-only key is refused: engines from 0.17.0 on reject one, since
+	// it would switch the auth gate on and then admit every request.
 	APIKey string
 
 	// Host overrides the host imposters are reached at. It defaults to the admin URL's host,
@@ -44,6 +47,9 @@ var _ Client = (*Remote)(nil)
 // Connect returns a Client for an engine already listening at adminURL, e.g.
 // "http://localhost:2525". It does not contact the engine; call Ping to check reachability.
 func Connect(adminURL string, opts RemoteOptions) (*Remote, error) {
+	if err := checkAPIKey(opts.APIKey); err != nil {
+		return nil, err
+	}
 	u, err := url.Parse(adminURL)
 	if err != nil {
 		return nil, fmt.Errorf("%w: admin URL %q: %w", ErrInvalidDefinition, adminURL, err)
@@ -337,7 +343,7 @@ func (r *Remote) do(ctx context.Context, method, path string, body []byte) (json
 		req.Header.Set("Content-Type", "application/json")
 	}
 	if r.apiKey != "" {
-		req.Header.Set("x-api-key", r.apiKey)
+		req.Header.Set("Authorization", r.apiKey)
 	}
 
 	resp, err := r.http.Do(req)
@@ -398,3 +404,14 @@ func decodeRecorded(raw []byte) ([]RecordedRequest, error) {
 }
 
 func itoa(p uint16) string { return strconv.Itoa(int(p)) }
+
+// checkAPIKey refuses a key that is present but blank. The engine refuses one too, but only after
+// Spawn has started a process or Connect has sent a request, so the failure would surface far from
+// its cause.
+func checkAPIKey(key string) error {
+	if key != "" && strings.TrimSpace(key) == "" {
+		return fmt.Errorf("%w: API key is blank; set a real token, or leave it empty to run the "+
+			"admin API unauthenticated", ErrInvalidDefinition)
+	}
+	return nil
+}

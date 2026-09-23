@@ -3,6 +3,7 @@ package rift_test
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -194,25 +195,105 @@ func TestRecordedAcceptsBareAndWrappedShapes(t *testing.T) {
 	}
 }
 
-func TestAPIKeyHeaderIsSent(t *testing.T) {
-	var key string
+// authHeaders is what a fake engine saw on a Ping.
+type authHeaders struct {
+	Auth      string
+	HasAuth   bool
+	HasLegacy bool
+}
+
+// pingWithKey pings a fake engine with the given key and reports the auth-relevant headers.
+func pingWithKey(t *testing.T, key string) authHeaders {
+	t.Helper()
+	var got authHeaders
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		key = r.Header.Get("x-api-key")
+		got.Auth = r.Header.Get("Authorization")
+		_, got.HasAuth = r.Header["Authorization"]
+		_, got.HasLegacy = r.Header["X-Api-Key"]
 		_, _ = w.Write([]byte(`{}`))
 	}))
 	t.Cleanup(srv.Close)
 
-	c, err := rift.Connect(srv.URL, rift.RemoteOptions{APIKey: "s3cret"})
+	c, err := rift.Connect(srv.URL, rift.RemoteOptions{APIKey: key})
+	if err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+	t.Cleanup(func() { _ = c.Close() })
+	if err := c.Ping(t.Context()); err != nil {
+		t.Fatalf("Ping: %v", err)
+	}
+	return got
+}
+
+func TestAPIKeyIsSentAsRawAuthorizationHeader(t *testing.T) {
+	got := pingWithKey(t, "s3cret")
+	if got.Auth != "s3cret" {
+		t.Errorf("Authorization = %q, want the raw key %q (no scheme)", got.Auth, "s3cret")
+	}
+	if got.HasLegacy {
+		t.Error("x-api-key was sent; the engine never reads it")
+	}
+}
+
+func TestNoAPIKeySendsNoAuthorizationHeader(t *testing.T) {
+	if pingWithKey(t, "").HasAuth {
+		t.Error("Authorization header sent without an API key")
+	}
+}
+
+func TestAPIKeyWithInnerSpacesIsSentVerbatim(t *testing.T) {
+	if got := pingWithKey(t, "a b"); got.Auth != "a b" {
+		t.Errorf("Authorization = %q, want %q", got.Auth, "a b")
+	}
+}
+
+func TestUnauthorizedIsAnEngineErrorWith401(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"errors":[{"code":"unauthorized","type":"unauthorized","message":"Invalid authorization token"}]}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	c, err := rift.Connect(srv.URL, rift.RemoteOptions{APIKey: "wrong"})
 	if err != nil {
 		t.Fatalf("Connect: %v", err)
 	}
 	t.Cleanup(func() { _ = c.Close() })
 
-	if err := c.Ping(t.Context()); err != nil {
-		t.Fatalf("Ping: %v", err)
+	err = c.Ping(t.Context())
+	var ee *rift.EngineError
+	if !errors.As(err, &ee) {
+		t.Fatalf("err = %v, want *EngineError", err)
 	}
-	if key != "s3cret" {
-		t.Errorf("x-api-key = %q", key)
+	if ee.Code != 401 || ee.Message != "Invalid authorization token" {
+		t.Errorf("EngineError = {Code:%d Message:%q}", ee.Code, ee.Message)
+	}
+}
+
+func TestBlankAPIKeyIsRefusedBeforeAnyRequest(t *testing.T) {
+	for _, key := range []string{" ", "\t\n", "   "} {
+		t.Run(fmt.Sprintf("%q", key), func(t *testing.T) {
+			var hits int
+			srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+				hits++
+			}))
+			t.Cleanup(srv.Close)
+
+			_, err := rift.Connect(srv.URL, rift.RemoteOptions{APIKey: key})
+			if !errors.Is(err, rift.ErrInvalidDefinition) {
+				t.Errorf("Connect err = %v, want ErrInvalidDefinition", err)
+			}
+			if hits != 0 {
+				t.Errorf("engine contacted %d times", hits)
+			}
+
+			// Spawn must refuse before resolving a binary: this nonexistent path would otherwise
+			// surface as ErrEngineUnavailable.
+			_, err = rift.Spawn(t.Context(), rift.SpawnOptions{Binary: "/nonexistent/rift", APIKey: key})
+			if !errors.Is(err, rift.ErrInvalidDefinition) {
+				t.Errorf("Spawn err = %v, want ErrInvalidDefinition", err)
+			}
+		})
 	}
 }
 

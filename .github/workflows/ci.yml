@@ -117,6 +117,15 @@ jobs:
       - name: embedded engine + intercept
         run: go test -race -count=1 -v ./riftembed/...
 
+      # Spawn against the real binary: the only lane that checks that the CLI flags and the auth
+      # header the SDK sends are the ones this engine release accepts.
+      - name: spawn transport against the engine binary
+        run: |
+          set -euo pipefail
+          go test -race -count=1 -v -run TestSpawn ./rift/... 2>&1 | tee spawn.log
+          grep -q -- "--- PASS: TestSpawnWithAPIKeyAuthenticates" spawn.log \
+            || { echo "::error::the spawn test skipped instead of running"; exit 1; }
+
       # Both lanes are required. A fixture may be skipped only when the manifest's `requires`
       # names a capability this lane lacks — never for any other reason — so a run that silently
       # skipped everything would still report green. Assert both lanes actually ran.

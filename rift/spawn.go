@@ -44,7 +44,7 @@ type SpawnOptions struct {
 	// StartTimeout bounds the wait for the admin API to answer. Zero means 20s.
 	StartTimeout time.Duration
 
-	// APIKey is passed to the engine and used on admin calls.
+	// APIKey is passed to the engine as --api-key and used on admin calls. See RemoteOptions.APIKey.
 	APIKey string
 
 	// RemoteOptions customise the admin client built for the spawned engine. Its APIKey and
@@ -89,6 +89,9 @@ func newProcess(cmd *exec.Cmd) *process {
 // not collide, and Spawn does not return until the admin API answers — a client that raced
 // startup would fail intermittently in exactly the way that is hardest to debug.
 func Spawn(ctx context.Context, opts SpawnOptions) (*Remote, error) {
+	if err := checkAPIKey(opts.APIKey); err != nil {
+		return nil, err
+	}
 	bin, err := findBinary(opts.Binary)
 	if err != nil {
 		return nil, err
@@ -103,7 +106,7 @@ func Spawn(ctx context.Context, opts SpawnOptions) (*Remote, error) {
 
 	args := []string{"--port", strconv.Itoa(int(port))}
 	if opts.APIKey != "" {
-		args = append(args, "--apiKey", opts.APIKey)
+		args = append(args, "--api-key", opts.APIKey)
 	}
 	args = append(args, opts.Args...)
 
