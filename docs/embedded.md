@@ -116,9 +116,9 @@ too: it would switch the auth gate on and then admit every request.
 
 ```go
 info, _ := eng.BuildInfo()
-info.Version                           // "0.18.0"
+info.Version                           // "0.18.1"
 info.Features                          // compiled features: ["redis-backend", "javascript"]
-info.SupportsServeOption("noParse")    // true on 0.18.0, false on 0.17.0
+info.SupportsServeOption("noParse")    // true on 0.18.1, false on 0.17.0
 ```
 
 `ServeOptions` is the supported way to feature-detect. The **absence** of a key means an engine
@@ -138,12 +138,12 @@ which an engine older than 0.17.0 would drop and then serve an open admin plane.
 | `APIKey` | all | Clients send it as the raw `Authorization` header. |
 | `MetricsPort` | all | Serve Prometheus metrics on this port, on the same host. |
 | `ConfigFile` | all | Load imposters from a JSON or YAML file; `POST /admin/reload` re-reads it. |
-| `NoParse` | 0.18.0 | Load `ConfigFile` verbatim, skipping EJS preprocessing. The only way to keep a literal `<%`. Requires `ConfigFile`. |
+| `NoParse` | 0.18.1 | Load `ConfigFile` verbatim, skipping EJS preprocessing. The only way to keep a literal `<%`. Requires `ConfigFile`. |
 | `Config` | all | Apply an imposters document at serve time. |
 | `AllowInjection` | all | Admit inject and script imposters arriving through the admin plane or `ConfigFile`. |
-| `RequireAdminAuth` | 0.17.0 | Refuse an off-host admin plane with no `APIKey`; from 0.18.0 it also governs `StartIntercept`. |
-| `UpstreamCAFile`, `UpstreamCAPEM` | 0.18.0 | Trust an extra CA, from a file or inline, for the TLS the engine dials. One or the other. |
-| `UpstreamTLSSkipVerify` | 0.18.0 | Accept any upstream certificate. Development only. |
+| `RequireAdminAuth` | 0.17.0 | Refuse an off-host admin plane with no `APIKey`; from 0.18.1 it also governs `StartIntercept`. |
+| `UpstreamCAFile`, `UpstreamCAPEM` | 0.18.1 | Trust an extra CA, from a file or inline, for the TLS the engine dials. One or the other. |
+| `UpstreamTLSSkipVerify` | 0.18.1 | Accept any upstream certificate. Development only. |
 
 Imposters this process hands the engine directly (`CreateImposter`, `ApplyConfig` and
 `ServeOptions.Config`) are never gated by `AllowInjection`: the embedding process can already run
@@ -167,7 +167,7 @@ can serve on loopback with port 0.
 
 `UpstreamCAFile` and `UpstreamCAPEM` append to the OS trust store, and supplying both is refused.
 `UpstreamTLSSkipVerify` accepts any certificate. It is for development only, and the engine logs a
-warning. All three need engine 0.18.0 or later.
+warning. All three need engine 0.18.1 or later.
 
 !!! warning "`SSL_CERT_FILE` replaces, it does not append"
     The engine honours `SSL_CERT_FILE`, but that variable **replaces** the trust store. Pointing it
